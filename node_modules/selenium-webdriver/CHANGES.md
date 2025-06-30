@@ -1,3 +1,10 @@
+## 4.34.0
+
+- Bumping to nightly versions
+- Add warning when ftp proxy is used (#15905)
+- specify min required node version to >=20.0.0
+- [cdp] Add CDP for Chrome 138 and remove 135
+
 ## 4.33.0
 
 - [cdp] Add CDP for Chrome 137 and remove 134

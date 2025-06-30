@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 const os = require('os');
 
+const tsNodeBin = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'ts-node.cmd' : 'ts-node');
+
 const resultsDir = path.join(process.cwd(), 'test-results');
 
 function deleteAllScreenshots(dir: string) {
@@ -70,7 +72,8 @@ function testHasRegressionType(testFile: string, type: string): boolean {
   return false;
 }
 
-const tests = findTestFiles(path.join(__dirname, 'tests'));
+// Use process.cwd() instead of __dirname for test discovery
+const tests = findTestFiles(path.join(process.cwd(), 'tests'));
 
 const colors = {
   green: '\x1b[32m',
@@ -98,7 +101,8 @@ const debugFilteredTests = debugMode ? filteredTests.slice(0, 5) : filteredTests
 function groupTestsByPage(tests: string[]): Record<string, { header?: string; others: string[] }> {
   const groups: Record<string, { header?: string; others: string[] }> = {};
   for (const test of tests) {
-    const match = test.match(/tests\/(.+?)\/(header-loads|content-loads)\.test\.ts$/);
+    const normalized = test.replace(/\\/g, '/');
+    const match = normalized.match(/tests\/(.+)\/(header-loads|content-loads)\.test\.ts$/);
     if (match) {
       const page = match[1];
       const type = match[2];
@@ -115,6 +119,10 @@ function groupTestsByPage(tests: string[]): Record<string, { header?: string; ot
 
 const SHOW_REALTIME_LOGS = true;
 
+// Remove or comment out the following debug logs:
+// console.log("Discovered test files:", tests);
+// console.log("Running all tests with run-all-tests.ts...");
+
 (async function runAllTests() {
   let allPassed = true;
   const testResults: { name: string; passed: boolean; errorMsg?: string; screenshotPath?: string; durationMs?: number }[] = [];
@@ -125,7 +133,24 @@ const SHOW_REALTIME_LOGS = true;
     if (header) {
       let start = Date.now();
       await new Promise<void>((resolve) => {
-        const proc = spawn('ts-node', [header], { stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+        const isWin = process.platform === 'win32';
+        let proc;
+        if (isWin) {
+          // shell:true, single string, quote both paths
+          const cmd = `"${tsNodeBin}" "${header}"`;
+          proc = spawn(cmd, [], {
+            stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+            shell: true,
+            env: process.env,
+          });
+        } else {
+          // shell:false, array form
+          proc = spawn(tsNodeBin, [header], {
+            stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+            shell: false,
+            env: process.env,
+          });
+        }
         let output = '';
         let error = '';
         // Removed timeout logic (undo)
@@ -173,7 +198,22 @@ const SHOW_REALTIME_LOGS = true;
       for (const test of others) {
         let start = Date.now();
         await new Promise<void>((resolve) => {
-          const proc = spawn('ts-node', [test], { stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+          const isWin = process.platform === 'win32';
+          let proc;
+          if (isWin) {
+            const cmd = `"${tsNodeBin}" "${test}"`;
+            proc = spawn(cmd, [], {
+              stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+              shell: true,
+              env: process.env,
+            });
+          } else {
+            proc = spawn(tsNodeBin, [test], {
+              stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+              shell: false,
+              env: process.env,
+            });
+          }
           let output = '';
           let error = '';
           // Removed timeout logic (undo)
@@ -264,9 +304,13 @@ html += `</tbody></table>\n</body>\n</html>\n`;
   const summaryPath = path.join(resultsDir, 'test-results-summary.html');
   fs.writeFileSync(summaryPath, html);
 
-  // Open the summary in the default browser (macOS: 'open', Windows: 'start', Linux: 'xdg-open')
-  const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  require('child_process').spawn(openCmd, [summaryPath], { stdio: 'ignore', detached: true });
+  // Open the summary in the default browser (macOS: 'open', Windows: 'cmd /c start "" <file>', Linux: 'xdg-open')
+  if (process.platform === 'win32') {
+    require('child_process').spawn('cmd', ['/c', 'start', '', summaryPath], { stdio: 'ignore', detached: true });
+  } else {
+    const openCmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    require('child_process').spawn(openCmd, [summaryPath], { stdio: 'ignore', detached: true });
+  }
 
   process.exit(allPassed ? 0 : 1);
 })();

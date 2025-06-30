@@ -23,16 +23,17 @@ export class BaseSeleniumTest {
   getScreenshotName(): string {
     if (this.screenshotName) {
       // Only use the part after the pageName, e.g. content-loads
-      const parts = this.screenshotName.split('/');
+      const parts = this.screenshotName.split(/[\\/]/); // cross-platform
       return parts.length > 1 ? parts[1] : parts[0];
     }
     try {
       const err = new Error();
       const stack = err.stack?.split("\n") || [];
       for (const line of stack) {
-        const match = line.match(/\((.*tests\/(.*)\.test\.ts):/);
+        // cross-platform: match both / and \\ in stack traces
+        const match = line.match(/\((.*tests[\\/](.*)\.test\.ts):/);
         if (match) {
-          const parts = match[2].split('/');
+          const parts = match[2].split(/[\\/]/); // cross-platform
           return parts[parts.length - 1];
         }
       }
@@ -41,7 +42,11 @@ export class BaseSeleniumTest {
   }
 
   async start() {
-    this.driver = await new Builder().forBrowser('chrome').build();
+    const chrome = require('selenium-webdriver/chrome');
+    const options = new chrome.Options();
+    options.addArguments('--ignore-certificate-errors');
+    options.addArguments('--log-level=3'); // Suppress most Chrome logs
+    this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
   }
 
   async saveScreenshot() {

@@ -5,10 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "ts-node run-all-tests.ts",
+    "test:single": "ts-node",
     "build": "tsc",
-    "test:develop": "TEST_ENV=develop npm test",
-    "test:production": "TEST_ENV=production npm test",
-    "test:release": "TEST_ENV=release npm test",
+    "test:develop": "cross-env TEST_ENV=develop npm test",
+    "test:production": "cross-env TEST_ENV=production npm test",
+    "test:release": "cross-env TEST_ENV=release npm test",
     "test:debug": "ts-node run-all-tests.ts --debug"
   },
   "dependencies": {
@@ -17,6 +18,8 @@
   "devDependencies": {
     "@types/node": "^24.0.4",
     "@types/selenium-webdriver": "^4.1.28",
+    "cross-env": "^7.0.3",
+    "cross-var": "^1.5.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }

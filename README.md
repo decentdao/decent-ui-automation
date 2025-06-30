@@ -9,10 +9,19 @@ This project provides a basic setup for running automated UI regression tests on
    npm install
    ```
 2. Ensure you have Chrome and ChromeDriver installed and available in your PATH.
-3. Run the example test:
+3. Run all tests:
    ```sh
-   npm test -- tests/app-homepage/header-loads.test.ts
+   npm test
    ```
+4. Run a specific test file (cross-platform):
+   ```sh
+   npm run test:single -- tests/app-homepage/header-loads.test.ts
+   ```
+5. **Run only a subset of tests for quick feedback (debug mode):**
+   ```sh
+   npm run test:debug
+   ```
+   This will run only a small number of tests (5) for faster iteration.
 
 ## Customizing
 - Add more test files in the `tests/` directory.
@@ -32,7 +41,7 @@ Test environments are defined in `config/environments.js`:
 
 ### Running Tests for a Specific Environment
 
-Use the following npm scripts:
+Use the following npm scripts (now cross-platform with `cross-env`):
 
 - Develop (default):
   ```sh
@@ -46,6 +55,8 @@ Use the following npm scripts:
   ```sh
   npm run test:release
   ```
+
+> **Note:** The scripts for environment selection use [`cross-env`](https://www.npmjs.com/package/cross-env) for compatibility with Windows and Mac/Linux. This is installed as a dev dependency.
 
 You can add more environments by editing `config/environments.js`.
 
