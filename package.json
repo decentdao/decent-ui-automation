@@ -19,7 +19,6 @@
     "@types/node": "^24.0.4",
     "@types/selenium-webdriver": "^4.1.28",
     "cross-env": "^7.0.3",
-    "cross-var": "^1.5.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
