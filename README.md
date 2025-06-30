@@ -11,7 +11,7 @@ This project provides a basic setup for running automated UI regression tests on
 2. Ensure you have Chrome and ChromeDriver installed and available in your PATH.
 3. Run the example test:
    ```sh
-   npm test
+   npm test -- tests/app-homepage/header-loads.test.ts
    ```
 
 ## Customizing
