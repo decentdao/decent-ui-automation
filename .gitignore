@@ -1,0 +1,4 @@
+# Ignore compiled JS and test-results
+*.js
+*.js.map
+test-results/

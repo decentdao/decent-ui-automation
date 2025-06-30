@@ -1,0 +1,23 @@
+{
+  "name": "selenium-regression-tests",
+  "version": "1.0.0",
+  "description": "Automated regression tests for a webapp using Selenium WebDriver in JavaScript.",
+  "main": "index.js",
+  "scripts": {
+    "test": "ts-node run-all-tests.ts",
+    "build": "tsc",
+    "test:develop": "TEST_ENV=develop npm test",
+    "test:production": "TEST_ENV=production npm test",
+    "test:release": "TEST_ENV=release npm test",
+    "test:debug": "ts-node run-all-tests.ts --debug"
+  },
+  "dependencies": {
+    "selenium-webdriver": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "@types/selenium-webdriver": "^4.1.28",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
