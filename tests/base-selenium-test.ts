@@ -14,8 +14,14 @@ export class BaseSeleniumTest {
     this.pageName = pageName;
     this.screenshotName = screenshotName;
     this.driver = null;
-    // Use process.cwd() to ensure screenshotDir is always relative to project root
-    this.screenshotDir = path.join(process.cwd(), `test-results/screenshots/${pageName}`);
+    // Prefer SCREENSHOTS_DIR env if set, else use default
+    const envScreenshotsDir = process.env.SCREENSHOTS_DIR;
+    if (envScreenshotsDir) {
+      // Always append pageName so screenshots are grouped by test type under the governance dir
+      this.screenshotDir = path.join(envScreenshotsDir, pageName);
+    } else {
+      this.screenshotDir = path.join(process.cwd(), `test-results/screenshots/${pageName}`);
+    }
     if (!fs.existsSync(this.screenshotDir)) fs.mkdirSync(this.screenshotDir, { recursive: true });
     this.screenshotPath = undefined;
   }

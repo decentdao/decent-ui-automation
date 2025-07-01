@@ -15,3 +15,17 @@ export const testDaos = {
     get value(): string { return `${this.network}:${this.address}`; }
   }
 };
+
+/**
+ * Returns the test DAO configuration for the specified governance type.
+ * @param governanceType Optional. One of 'erc20', 'erc721', or 'multisig'.
+ *                      If not provided, uses process.env.GOVERNANCE_TYPE or defaults to 'erc20'.
+ * @throws {Error} If an unknown governance type is provided.
+ */
+export function getTestDao(governanceType?: string) {
+  const type = (governanceType || 'erc20').toLowerCase();
+  if (type === 'erc20') return testDaos.ERC20;
+  if (type === 'erc721') return testDaos.ERC721;
+  if (type === 'multisig') return testDaos.multisig;
+  throw new Error(`Unknown governance type: ${governanceType}`);
+}
