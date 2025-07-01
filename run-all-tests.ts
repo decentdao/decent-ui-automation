@@ -179,7 +179,15 @@ const SHOW_REALTIME_LOGS = true;
           let durationMs = Date.now() - start;
           if (!passed) {
             // Always include all output and error for failed tests
-            errorMsg = (output + '\n' + error).trim();
+            // Treat any output (stdout or stderr) as an error reason if the test failed
+            errorMsg = '';
+            if (output.trim()) {
+              errorMsg += '[Console Output]\n' + output.trim() + '\n';
+            }
+            if (error.trim()) {
+              errorMsg += '[Error Output]\n' + error.trim() + '\n';
+            }
+            errorMsg = errorMsg.trim();
             // If either output or error contains TimeoutError, prefer that message
             const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(errorMsg);
             if (timeoutMatch) {
@@ -243,7 +251,15 @@ const SHOW_REALTIME_LOGS = true;
             let durationMs = Date.now() - start;
             if (!passed) {
               // Always include all output and error for failed tests
-              errorMsg = (output + '\n' + error).trim();
+              // Treat any output (stdout or stderr) as an error reason if the test failed
+              errorMsg = '';
+              if (output.trim()) {
+                errorMsg += '[Console Output]\n' + output.trim() + '\n';
+              }
+              if (error.trim()) {
+                errorMsg += '[Error Output]\n' + error.trim() + '\n';
+              }
+              errorMsg = errorMsg.trim();
               // If either output or error contains TimeoutError, prefer that message
               const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(errorMsg);
               if (timeoutMatch) {
