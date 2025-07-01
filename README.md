@@ -86,7 +86,7 @@ You can pass custom flags as URL parameters to all tests using the `--flags` arg
 
 - With the npm test script:
   ```sh
-  npm test -- --flags=featureX,debug
+  npm test -- --flags=flag_feature_1=on,flag_dev=on
   ```
 - With a bare value (no --flags= prefix):
   ```sh
@@ -94,7 +94,7 @@ You can pass custom flags as URL parameters to all tests using the `--flags` arg
   ```
 - With a specific test file:
   ```sh
-  npm run test:single -- tests/app-homepage/header-loads.test.ts --flags=featureA
+  npm run test:single -- tests/app-homepage/header-loads.test.ts --flags=flag_feature_1=on
   ```
 
 **Flag Delimiters:**
@@ -104,13 +104,14 @@ You can pass custom flags as URL parameters to all tests using the `--flags` arg
 **How it works:**
 - The test runner sets the `TEST_FLAGS` environment variable for each test process.
 - All test files use a helper to append these flags to the URLs they load.
-- Any flag passed will be visible in the test results summary and in the URLs visited by Selenium.
+- Any flag passed will be visible in the URLs visited by Selenium.
 
 **Example:**
 If you run:
 ```sh
-npm test -- --flags=beta,debug
+npm test -- --flags=flag_feature_1=on,flag_dev=on
 ```
-All test URLs will include `?flags=beta,debug` (or merged with existing params).
+All test URLs will include `?flags=flag_feature_1=on,flag_dev=on` (or merged with existing params).
 
 See `tests/test-helpers.ts` for details on how flags are parsed and appended.
+
