@@ -1,4 +1,4 @@
-import { getBaseUrl } from '../test-helpers';
+import { getBaseUrl, appendFlagsToUrl } from '../test-helpers';
 import { testDaos } from '../../config/test-daos';
 import { BaseSeleniumTest } from '../base-selenium-test';
 import { By } from 'selenium-webdriver';
@@ -10,7 +10,7 @@ const test = new BaseSeleniumTest('proposal-overview', 'proposal-overview/conten
 BaseSeleniumTest.run(async (test) => {
   let proposalNumber: string | null = null;
   await test.start();
-  await test.driver!.get(getBaseUrl() + DAO_HOME_PATH);
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + DAO_HOME_PATH));
   // Find the first proposal link
   const proposalLink = await test.waitForElement(By.css('a[href^="/proposals/"]'), 20000);
   const href = await proposalLink.getAttribute('href');

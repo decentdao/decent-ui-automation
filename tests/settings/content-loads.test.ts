@@ -1,4 +1,4 @@
-import { getBaseUrl } from '../test-helpers';
+import { getBaseUrl, appendFlagsToUrl } from '../test-helpers';
 import { testDaos } from '../../config/test-daos';
 import { BaseSeleniumTest } from '../base-selenium-test';
 import { By } from 'selenium-webdriver';
@@ -10,7 +10,7 @@ const test = new BaseSeleniumTest('settings', 'settings/content-loads');
 BaseSeleniumTest.run(async (test) => {
   // Step 1: Load the DAO homepage
   await test.start();
-  await test.driver!.get(getBaseUrl() + DAO_HOME_PATH);
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + DAO_HOME_PATH));
   // Step 2: Click the 'Manage DAO' button
   const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'), 10000);
   await manageBtn.click();

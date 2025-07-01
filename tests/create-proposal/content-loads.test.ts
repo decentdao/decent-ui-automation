@@ -1,4 +1,4 @@
-import { getBaseUrl } from '../test-helpers';
+import { getBaseUrl, appendFlagsToUrl } from '../test-helpers';
 import { testDaos } from '../../config/test-daos';
 import { BaseSeleniumTest } from '../base-selenium-test';
 import { By } from 'selenium-webdriver';
@@ -10,7 +10,7 @@ const test = new BaseSeleniumTest('create-proposal', 'create-proposal/content-lo
 BaseSeleniumTest.run(async (test) => {
   // Directly load the create proposal page
   await test.start();
-  await test.driver!.get(getBaseUrl() + CREATE_PROPOSAL_PATH);
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + CREATE_PROPOSAL_PATH));
   // Confirm the metadata title field is present
   await test.waitForElement(By.css('[data-testid="metadata.title"]'), 10000);
   console.log('Create Proposal page loaded and metadata title field found.');

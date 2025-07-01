@@ -84,8 +84,19 @@ const colors = {
 const regressionTypeFilter = process.env.REGRESSION_TYPE;
 
 const argv = process.argv.slice(2);
+
 const debugMode = argv.includes('--debug');
 const testFileArgs = argv.filter(arg => arg.endsWith('.test.ts'));
+// Accept --flags=... or a bare value as the flags
+let flagsArg = argv.find(arg => arg.startsWith('--flags='));
+let testFlags = '';
+if (flagsArg) {
+  testFlags = flagsArg.replace('--flags=', '');
+} else {
+  // If not found, but a single non-option arg exists, treat it as flags
+  const bareFlags = argv.find(arg => !arg.startsWith('--') && !arg.endsWith('.test.ts'));
+  if (bareFlags) testFlags = bareFlags;
+}
 
 let filteredTests: string[];
 if (testFileArgs.length > 0) {
@@ -141,14 +152,14 @@ const SHOW_REALTIME_LOGS = true;
           proc = spawn(cmd, [], {
             stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
             shell: true,
-            env: process.env,
+            env: { ...process.env, TEST_FLAGS: testFlags },
           });
         } else {
           // shell:false, array form
           proc = spawn(tsNodeBin, [header], {
             stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
             shell: false,
-            env: process.env,
+            env: { ...process.env, TEST_FLAGS: testFlags },
           });
         }
         let output = '';
@@ -167,6 +178,7 @@ const SHOW_REALTIME_LOGS = true;
           let screenshotPath = findScreenshotPath(testName);
           let durationMs = Date.now() - start;
           if (!passed) {
+            // Always include all output and error for failed tests
             errorMsg = (output + '\n' + error).trim();
             // If either output or error contains TimeoutError, prefer that message
             const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(errorMsg);
@@ -205,13 +217,13 @@ const SHOW_REALTIME_LOGS = true;
             proc = spawn(cmd, [], {
               stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
               shell: true,
-              env: process.env,
+              env: { ...process.env, TEST_FLAGS: testFlags },
             });
           } else {
             proc = spawn(tsNodeBin, [test], {
               stdio: SHOW_REALTIME_LOGS ? 'inherit' : ['ignore', 'pipe', 'pipe'],
               shell: false,
-              env: process.env,
+              env: { ...process.env, TEST_FLAGS: testFlags },
             });
           }
           let output = '';
@@ -230,6 +242,7 @@ const SHOW_REALTIME_LOGS = true;
             let screenshotPath = findScreenshotPath(testName);
             let durationMs = Date.now() - start;
             if (!passed) {
+              // Always include all output and error for failed tests
               errorMsg = (output + '\n' + error).trim();
               // If either output or error contains TimeoutError, prefer that message
               const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(errorMsg);

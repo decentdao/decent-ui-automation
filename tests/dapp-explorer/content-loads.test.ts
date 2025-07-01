@@ -1,4 +1,4 @@
-import { getBaseUrl } from '../test-helpers';
+import { getBaseUrl, appendFlagsToUrl } from '../test-helpers';
 import { testDaos } from '../../config/test-daos';
 import { BaseSeleniumTest } from '../base-selenium-test';
 import { By } from 'selenium-webdriver';
@@ -10,7 +10,7 @@ const test = new BaseSeleniumTest('dapp-explorer', 'dapp-explorer/content-loads'
 BaseSeleniumTest.run(async (test) => {
   // Load the DAO homepage with demo_mode enabled
   await test.start();
-  await test.driver!.get(getBaseUrl() + DAO_HOME_PATH);
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + DAO_HOME_PATH));
   // Open the dApp Explorer modal
   const createProposalBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create Proposal')]"), 10000);
   await createProposalBtn.click();

@@ -1,4 +1,4 @@
-import { getBaseUrl } from '../test-helpers';
+import { getBaseUrl, appendFlagsToUrl } from '../test-helpers';
 import { testDaos } from '../../config/test-daos';
 import { BaseSeleniumTest } from '../base-selenium-test';
 import { By } from 'selenium-webdriver';
@@ -10,7 +10,7 @@ const test = new BaseSeleniumTest('proposal-templates', 'proposal-templates/cont
 BaseSeleniumTest.run(async (test) => {
   // Directly load the proposal templates page
   await test.start();
-  await test.driver!.get(getBaseUrl() + PROPOSAL_TEMPLATES_PATH);
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + PROPOSAL_TEMPLATES_PATH));
   // Confirm the paragraph with text "Airdrop" is present
   await test.waitForElement(By.xpath("//p[contains(text(), 'Airdrop')]"), 10000);
   console.log('Proposal Templates page loaded and "Airdrop" paragraph found.');
