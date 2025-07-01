@@ -1,6 +1,6 @@
 # Decent UI Automation
 
-This project provides a basic setup for running automated UI regression tests on the Decent webapp using Selenium WebDriver. The project uses TypeScript as the primary coding language.
+This project provides a robust setup for running automated UI regression tests on the Decent webapp using Selenium WebDriver. The project uses TypeScript as the primary coding language.
 
 ## Getting Started
 
@@ -23,13 +23,47 @@ This project provides a basic setup for running automated UI regression tests on
    ```
    This will run only a small number of tests (5) for faster iteration.
 
+## Governance Types
+
+Tests can be run against different governance types supported by the Decent platform:
+
+- **erc20** (token voting)
+- **erc721** (NFT voting)
+- **multisig** (multi-signature)
+
+By default, all governance types are tested in sequence and results are aggregated into a single summary. You can also run tests for a specific governance type.
+
+### Running All Governance Types (default)
+
+```sh
+npm test
+```
+This will run all tests for `erc20`, `erc721`, and `multisig` governance types, and generate a combined summary in `test-results/test-results-summary.html`.
+
+### Running a Specific Governance Type
+
+You can run tests for a specific governance type using the provided scripts:
+
+- **ERC20:**
+  ```sh
+  npm run test:erc20
+  ```
+- **ERC721:**
+  ```sh
+  npm run test:erc721
+  ```
+- **Multisig:**
+  ```sh
+  npm run test:multisig
+  ```
+
 ## Customizing
 - Add more test files in the `tests/` directory.
 - Update the test scripts in `package.json` as needed.
 
 ## Configuration Files
 
-- Test environments are now defined in `config/environments.js`.
+- Test environments are defined in `config/environments.js`.
 - Update your test imports to use this new path if you add new tests.
 
 ## Test Environments
