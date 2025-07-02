@@ -160,19 +160,28 @@ if (testFileArgs.length > 0) {
 
 
 
+// Group tests by their parent directory (page/module), and include all .test.ts files
 function groupTestsByPage(tests: string[]): Record<string, { header?: string; others: string[] }> {
   const groups: Record<string, { header?: string; others: string[] }> = {};
   for (const test of tests) {
     const normalized = test.replace(/\\/g, '/');
-    const match = normalized.match(/tests\/(.+)\/(header-loads|content-loads)\.test\.ts$/);
+    // Extract the page/module as the parent directory under tests/
+    const match = normalized.match(/tests\/(.+)\/([^/]+)\.test\.ts$/);
     if (match) {
       const page = match[1];
-      const type = match[2];
+      const fileName = match[2];
       if (!groups[page]) groups[page] = { others: [] };
-      if (type === 'header-loads') {
+      if (fileName === 'header-loads') {
         groups[page].header = test;
       } else {
         groups[page].others.push(test);
+      }
+    } else {
+      // For .test.ts files directly under tests/ (no subdir), group under ''
+      const rootMatch = normalized.match(/tests\/([^/]+)\.test\.ts$/);
+      if (rootMatch) {
+        if (!groups['']) groups[''] = { others: [] };
+        groups[''].others.push(test);
       }
     }
   }

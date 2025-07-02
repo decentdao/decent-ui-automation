@@ -12,7 +12,6 @@ const governanceType = governanceArg ? governanceArg.split('=')[1].toLowerCase()
 const test = new BaseSeleniumTest('dao-homepage', 'content-loads');
 BaseSeleniumTest.run(async (test) => {
   // Load the DAO homepage
-  console.log('[DEBUG]', 'governanceType:', governanceType, 'DAO:', getTestDao(governanceType).value);
   await test.start();
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
