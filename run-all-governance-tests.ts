@@ -36,7 +36,8 @@ async function runAll() {
         if (fs.existsSync(summaryPath)) {
           html = fs.readFileSync(summaryPath, 'utf8');
           // Only patch screenshot links that do not already start with the governanceType
-          html = html.replace(/href='screenshots\/(?!${governanceType}\/)/g, `href='screenshots/${governanceType}/`);
+          const governanceTypeRegex = new RegExp(`href='screenshots/(?!${governanceType}/)`, 'g');
+          html = html.replace(governanceTypeRegex, `href='screenshots/${governanceType}/`);
         }
         // Extract stats from the HTML for summary
         const timestampMatch = html.match(/<b>Timestamp:<\/b> ([^<]+)<\/p>/);

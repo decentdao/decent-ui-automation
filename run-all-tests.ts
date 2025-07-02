@@ -80,7 +80,9 @@ function findTestFiles(dir: string): string[] {
 }
 
 function findScreenshotPath(testName: string): string | undefined {
-  const screenshotRelPath = testName.replace(/\\/g, '/').replace(/\.test\.ts$/, '.png');
+  // Remove any leading governance type from testName to avoid double folders
+  let cleanName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
+  const screenshotRelPath = cleanName.replace(/\\/g, '/').replace(/\.test\.ts$/, '.png');
   const screenshotPath = path.join(screenshotsDir, screenshotRelPath);
   if (fs.existsSync(screenshotPath)) return screenshotPath;
   return undefined;
