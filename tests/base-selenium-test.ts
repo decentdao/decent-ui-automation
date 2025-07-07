@@ -53,7 +53,9 @@ export class BaseSeleniumTest {
     const options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--log-level=3'); // Suppress most Chrome logs
-    // Do NOT set --user-data-dir; let Chrome manage its own temp profile
+    options.addArguments('--headless=new'); // Use new headless mode for CI
+    // Print Chrome options for debugging
+    console.log('Chrome options:', options.args_);
     this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
   }
 
