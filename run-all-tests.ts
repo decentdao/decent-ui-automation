@@ -36,6 +36,7 @@ function getAllCliArgs() {
 
 const argv = getAllCliArgs();
 import { spawn } from 'child_process';
+import { maxConcurrency } from './config/test-settings';
 import * as path from 'path';
 import * as fs from 'fs';
 const os = require('os');
@@ -192,6 +193,7 @@ function groupTestsByPage(tests: string[]): Record<string, { header?: string; ot
 // Always capture output for summary, but also print in real time
 const SHOW_REALTIME_LOGS = true;
 
+const wallClockStart = Date.now();
 (async function runAllTests() {
   let allPassed = true;
   const testResults: { name: string; passed: boolean; errorMsg?: string; screenshotPath?: string; durationMs?: number }[] = [];
@@ -201,7 +203,14 @@ const SHOW_REALTIME_LOGS = true;
     // In debug mode, run only the first 5 test files directly, no grouping or grouping logic
     // If only one test, run it directly and show summary
     const testsToRun = debugMode ? filteredTests.slice(0, 5) : filteredTests;
-    for (const testFile of testsToRun) {
+    // Parallel worker pool for test files
+    const queue = [...testsToRun];
+    let running = 0;
+    async function runNext(): Promise<void> {
+      if (queue.length === 0) return;
+      const testFile = queue.shift();
+      if (!testFile) return;
+      running++;
       let start = Date.now();
       await new Promise<void>((resolve) => {
         const isWin = process.platform === 'win32';
@@ -209,13 +218,13 @@ const SHOW_REALTIME_LOGS = true;
         if (isWin) {
           const cmd = `"${tsNodeBin}" "${testFile}" --governance=${governanceType}`;
           proc = spawn(cmd, [], {
-            stdio: ['ignore', 'pipe', 'pipe'], // Always capture output
+            stdio: ['ignore', 'pipe', 'pipe'],
             shell: true,
             env: { ...process.env, TEST_FLAGS: testFlags },
           });
         } else {
           proc = spawn(tsNodeBin, [testFile, `--governance=${governanceType}`], {
-            stdio: ['ignore', 'pipe', 'pipe'], // Always capture output
+            stdio: ['ignore', 'pipe', 'pipe'],
             shell: false,
             env: { ...process.env, TEST_FLAGS: testFlags },
           });
@@ -238,24 +247,19 @@ const SHOW_REALTIME_LOGS = true;
         }
         proc.on('close', (code) => {
           let testName = path.relative(path.join(__dirname, 'tests'), testFile).replace(/\\/g, '/');
-          // Remove leading token-voting/, multisig/, or governance type (erc20/erc721/multisig) if present
           testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
           const passed = code === 0;
           let screenshotPath = findScreenshotPath(testName);
           let durationMs = Date.now() - start;
           if (!passed) {
-            // Always show all output, even if not marked as error
             let msgParts = [];
             if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
             if (error.trim()) msgParts.push('[Error Output]\n' + error.trim());
-            // If neither output nor error, try to read the process exit code message
             let errorMsg = msgParts.join('\n');
-            // If TimeoutError is present in either output or error, prepend it
             const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(output + '\n' + error);
             if (timeoutMatch && !errorMsg.startsWith(timeoutMatch[0].trim())) {
               errorMsg = timeoutMatch[0].trim() + '\n' + errorMsg;
             }
-            // Always append error from temp file if present
             const tempError = proc.pid !== undefined ? readTempErrorFile(proc.pid) : undefined;
             if (tempError && !errorMsg.includes(tempError)) {
               errorMsg += (errorMsg ? '\n' : '') + tempError;
@@ -270,170 +274,105 @@ const SHOW_REALTIME_LOGS = true;
           } else {
             allPassed = false;
             console.log(`${testName}: ${colors.red}fail${colors.reset}`);
-            // Already printed in real time above, so no need to print again here
           }
+          running--;
           resolve();
         });
       });
+      await runNext();
     }
+    // Start up to maxConcurrency workers
+    const workers = [];
+    for (let i = 0; i < Math.min(maxConcurrency, testsToRun.length); i++) {
+      workers.push(runNext());
+    }
+    await Promise.all(workers);
   } else {
-    // In non-debug mode, run all tests using grouping
-    const groups = groupTestsByPage(filteredTests);
-    for (const page of Object.keys(groups)) {
-      const { header, others } = groups[page];
-      let headerPassed = true;
-      if (header) {
-        let start = Date.now();
-        await new Promise<void>((resolve) => {
-          const isWin = process.platform === 'win32';
-          let proc;
-          if (isWin) {
-            const cmd = `"${tsNodeBin}" "${header}" --governance=${governanceType}`;
-            proc = spawn(cmd, [], {
-              stdio: ['ignore', 'pipe', 'pipe'], // Always capture output
-              shell: true,
-              env: { ...process.env, TEST_FLAGS: testFlags },
-            });
-          } else {
-            proc = spawn(tsNodeBin, [header, `--governance=${governanceType}`], {
-              stdio: ['ignore', 'pipe', 'pipe'], // Always capture output
-              shell: false,
-              env: { ...process.env, TEST_FLAGS: testFlags },
-            });
-          }
-          let output = '';
-          let error = '';
-          if (proc.stdout) {
-            proc.stdout.on('data', (data) => {
-              const str = data.toString();
-              output += str;
-              if (SHOW_REALTIME_LOGS) process.stdout.write(str);
-            });
-          }
-          if (proc.stderr) {
-            proc.stderr.on('data', (data) => {
-              const str = data.toString();
-              error += str;
-              if (SHOW_REALTIME_LOGS) process.stderr.write(str);
-            });
-          }
-          proc.on('close', (code) => {
-            let testName = path.relative(path.join(__dirname, 'tests'), header).replace(/\\/g, '/');
-            testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
-            const passed = code === 0;
-            let screenshotPath = findScreenshotPath(testName);
-            let durationMs = Date.now() - start;
-            if (!passed) {
-              let msgParts = [];
-              if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
-              if (error.trim()) msgParts.push('[Error Output]\n' + error.trim());
-              let errorMsg = msgParts.join('\n');
-              const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(output + '\n' + error);
-              if (timeoutMatch && !errorMsg.startsWith(timeoutMatch[0].trim())) {
-                errorMsg = timeoutMatch[0].trim() + '\n' + errorMsg;
-              }
-              const tempError = proc.pid !== undefined ? readTempErrorFile(proc.pid) : undefined;
-              if (tempError && !errorMsg.includes(tempError)) {
-                errorMsg += (errorMsg ? '\n' : '') + tempError;
-              }
-              if (!errorMsg) errorMsg = 'Test failed (no error output)';
-              testResults.push({ name: testName, passed, errorMsg, screenshotPath, durationMs });
-            } else {
-              testResults.push({ name: testName, passed, screenshotPath, durationMs });
-            }
-            if (passed) {
-              console.log(`${testName}: ${colors.green}pass${colors.reset}`);
-            } else {
-              allPassed = false;
-              headerPassed = false;
-              console.log(`${testName}: ${colors.red}fail${colors.reset}`);
-              // Already printed in real time above, so no need to print again here
-            }
-            resolve();
+    // In non-debug mode, run all tests in parallel up to maxConcurrency
+    const testsToRun = filteredTests;
+    const queue = [...testsToRun];
+    let running = 0;
+    async function runNext(): Promise<void> {
+      if (queue.length === 0) return;
+      const testFile = queue.shift();
+      if (!testFile) return;
+      running++;
+      let start = Date.now();
+      await new Promise<void>((resolve) => {
+        const isWin = process.platform === 'win32';
+        let proc;
+        if (isWin) {
+          const cmd = `"${tsNodeBin}" "${testFile}" --governance=${governanceType}`;
+          proc = spawn(cmd, [], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: true,
+            env: { ...process.env, TEST_FLAGS: testFlags },
           });
-        });
-      }
-      if (headerPassed) {
-        for (const test of others) {
-          let start = Date.now();
-          await new Promise<void>((resolve) => {
-            const isWin = process.platform === 'win32';
-            let proc;
-            if (isWin) {
-              const cmd = `"${tsNodeBin}" "${test}" --governance=${governanceType}`;
-              proc = spawn(cmd, [], {
-                stdio: ['ignore', 'pipe', 'pipe'], // Always capture output
-                shell: true,
-                env: { ...process.env, TEST_FLAGS: testFlags },
-              });
-            } else {
-              proc = spawn(tsNodeBin, [test, `--governance=${governanceType}`], {
-                stdio: ['ignore', 'pipe', 'pipe'], // Always capture output
-                shell: false,
-                env: { ...process.env, TEST_FLAGS: testFlags },
-              });
-            }
-            let output = '';
-            let error = '';
-            if (proc.stdout) {
-              proc.stdout.on('data', (data) => {
-                const str = data.toString();
-                output += str;
-                if (SHOW_REALTIME_LOGS) process.stdout.write(str);
-              });
-            }
-            if (proc.stderr) {
-              proc.stderr.on('data', (data) => {
-                const str = data.toString();
-                error += str;
-                if (SHOW_REALTIME_LOGS) process.stderr.write(str);
-              });
-            }
-            proc.on('close', (code) => {
-              let testName = path.relative(path.join(__dirname, 'tests'), test).replace(/\\/g, '/');
-              testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
-              const passed = code === 0;
-              let screenshotPath = findScreenshotPath(testName);
-              let durationMs = Date.now() - start;
-              if (!passed) {
-                let msgParts = [];
-                if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
-                if (error.trim()) msgParts.push('[Error Output]\n' + error.trim());
-                let errorMsg = msgParts.join('\n');
-                const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(output + '\n' + error);
-                if (timeoutMatch && !errorMsg.startsWith(timeoutMatch[0].trim())) {
-                  errorMsg = timeoutMatch[0].trim() + '\n' + errorMsg;
-                }
-                // Always append error from temp file if present
-                const tempError = proc.pid !== undefined ? readTempErrorFile(proc.pid) : undefined;
-                if (tempError && !errorMsg.includes(tempError)) {
-                  errorMsg += (errorMsg ? '\n' : '') + tempError;
-                }
-                if (!errorMsg) errorMsg = 'Test failed (no error output)';
-                testResults.push({ name: testName, passed, errorMsg, screenshotPath, durationMs });
-              } else {
-                testResults.push({ name: testName, passed, screenshotPath, durationMs });
-              }
-              if (passed) {
-                console.log(`${testName}: ${colors.green}pass${colors.reset}`);
-              } else {
-                allPassed = false;
-                console.log(`${testName}: ${colors.red}fail${colors.reset}`);
-                // Already printed in real time above, so no need to print again here
-              }
-              resolve();
-            });
+        } else {
+          proc = spawn(tsNodeBin, [testFile, `--governance=${governanceType}`], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: false,
+            env: { ...process.env, TEST_FLAGS: testFlags },
           });
         }
-      } else {
-        for (const test of others) {
-          let testName = path.relative(path.join(__dirname, 'tests'), test).replace(/\\/g, '/');
+        let output = '';
+        let error = '';
+        if (proc.stdout) {
+          proc.stdout.on('data', (data) => {
+            const str = data.toString();
+            output += str;
+            if (SHOW_REALTIME_LOGS) process.stdout.write(str);
+          });
+        }
+        if (proc.stderr) {
+          proc.stderr.on('data', (data) => {
+            const str = data.toString();
+            error += str;
+            if (SHOW_REALTIME_LOGS) process.stderr.write(str);
+          });
+        }
+        proc.on('close', (code) => {
+          let testName = path.relative(path.join(__dirname, 'tests'), testFile).replace(/\\/g, '/');
           testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
-          testResults.push({ name: testName, passed: false, errorMsg: 'Skipped due to header-loads failure.' });
-          console.log(`${testName}: ${colors.red}skipped (header-loads failed)${colors.reset}`);
-        }
-      }
+          const passed = code === 0;
+          let screenshotPath = findScreenshotPath(testName);
+          let durationMs = Date.now() - start;
+          if (!passed) {
+            let msgParts = [];
+            if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
+            if (error.trim()) msgParts.push('[Error Output]\n' + error.trim());
+            let errorMsg = msgParts.join('\n');
+            const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(output + '\n' + error);
+            if (timeoutMatch && !errorMsg.startsWith(timeoutMatch[0].trim())) {
+              errorMsg = timeoutMatch[0].trim() + '\n' + errorMsg;
+            }
+            const tempError = proc.pid !== undefined ? readTempErrorFile(proc.pid) : undefined;
+            if (tempError && !errorMsg.includes(tempError)) {
+              errorMsg += (errorMsg ? '\n' : '') + tempError;
+            }
+            if (!errorMsg) errorMsg = 'Test failed (no error output)';
+            testResults.push({ name: testName, passed, errorMsg, screenshotPath, durationMs });
+          } else {
+            testResults.push({ name: testName, passed, screenshotPath, durationMs });
+          }
+          if (passed) {
+            console.log(`${testName}: ${colors.green}pass${colors.reset}`);
+          } else {
+            allPassed = false;
+            console.log(`${testName}: ${colors.red}fail${colors.reset}`);
+          }
+          running--;
+          resolve();
+        });
+      });
+      await runNext();
     }
+    // Start up to maxConcurrency workers
+    const workers = [];
+    for (let i = 0; i < Math.min(maxConcurrency, testsToRun.length); i++) {
+      workers.push(runNext());
+    }
+    await Promise.all(workers);
   }
   // Write test results summary as Markdown (for GitHub PR comments)
   if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true });
@@ -445,13 +384,15 @@ const SHOW_REALTIME_LOGS = true;
   const totalDuration = testResults.reduce((sum, r) => sum + (r.durationMs || 0), 0);
   const failedCount = testResults.filter(r => !r.passed && r.errorMsg !== 'Skipped due to header-loads failure.').length;
   const skippedCount = testResults.filter(r => r.errorMsg === 'Skipped due to header-loads failure.').length;
-  // Format total run time: show in minutes if >= 60s
+  // Wall-clock total run time
+  const wallClockEnd = Date.now();
+  const wallClockDuration = wallClockEnd - wallClockStart;
   let totalRunTimeStr = '';
-  const totalSeconds = totalDuration / 1000;
-  if (totalSeconds >= 60) {
-    totalRunTimeStr = (totalSeconds / 60).toFixed(1) + ' min';
+  const wallClockSeconds = wallClockDuration / 1000;
+  if (wallClockSeconds >= 60) {
+    totalRunTimeStr = (wallClockSeconds / 60).toFixed(1) + ' min';
   } else {
-    totalRunTimeStr = totalSeconds.toFixed(2) + 's';
+    totalRunTimeStr = wallClockSeconds.toFixed(2) + 's';
   }
 
   let md = `## 🧪 UI Automation Test Results\n\n`;
