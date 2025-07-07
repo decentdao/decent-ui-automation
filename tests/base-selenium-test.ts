@@ -54,8 +54,6 @@ export class BaseSeleniumTest {
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--log-level=3'); // Suppress most Chrome logs
     options.addArguments('--headless=new'); // Use new headless mode for CI
-    // Print Chrome options for debugging
-    console.log('Chrome options:', options.args_);
     this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
   }
 
