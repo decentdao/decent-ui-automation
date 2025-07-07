@@ -9,6 +9,7 @@ export class BaseSeleniumTest {
   driver: WebDriver | null;
   screenshotDir: string;
   screenshotPath?: string;
+  userDataDir?: string;
 
   constructor(pageName: string, screenshotName?: string) {
     this.pageName = pageName;
@@ -55,6 +56,7 @@ export class BaseSeleniumTest {
     // Ensure a unique user-data-dir for each test process to avoid session conflicts in CI
     const userDataDir = path.join(os.tmpdir(), `chrome-profile-${process.pid}-${Date.now()}-${Math.floor(Math.random()*100000)}`);
     options.addArguments(`--user-data-dir=${userDataDir}`);
+    this.userDataDir = userDataDir;
     this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
   }
 
@@ -84,6 +86,14 @@ export class BaseSeleniumTest {
         console.error('[BaseSeleniumTest] Error during saveScreenshot in finish:', err);
       }
       await this.driver.quit();
+      // Clean up user-data-dir if it was set
+      if (this.userDataDir && fs.existsSync(this.userDataDir)) {
+        try {
+          fs.rmSync(this.userDataDir, { recursive: true, force: true });
+        } catch (cleanupErr) {
+          console.warn('[BaseSeleniumTest] Failed to clean up user-data-dir:', cleanupErr);
+        }
+      }
       // Do not call process.exit here; let the test runner handle process exit
     }
   }
