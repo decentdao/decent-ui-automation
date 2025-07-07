@@ -435,7 +435,7 @@ const SHOW_REALTIME_LOGS = true;
       }
     }
   }
-  // Write test results summary as HTML
+  // Write test results summary as Markdown (for GitHub PR comments)
   if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true });
   const now = new Date();
   const pad = (n: number) => n.toString().padStart(2, '0');
@@ -445,9 +445,6 @@ const SHOW_REALTIME_LOGS = true;
   const totalDuration = testResults.reduce((sum, r) => sum + (r.durationMs || 0), 0);
   const failedCount = testResults.filter(r => !r.passed && r.errorMsg !== 'Skipped due to header-loads failure.').length;
   const skippedCount = testResults.filter(r => r.errorMsg === 'Skipped due to header-loads failure.').length;
-  const percentPassed = (passedCount / totalCount) * 100;
-  const percentFailed = (failedCount / totalCount) * 100;
-  const percentSkipped = (skippedCount / totalCount) * 100;
   // Format total run time: show in minutes if >= 60s
   let totalRunTimeStr = '';
   const totalSeconds = totalDuration / 1000;
@@ -456,8 +453,58 @@ const SHOW_REALTIME_LOGS = true;
   } else {
     totalRunTimeStr = totalSeconds.toFixed(2) + 's';
   }
-  let html = `<!DOCTYPE html>\n<html lang='en'>\n<head>\n<meta charset='UTF-8'>\n<title>Test Results Summary</title>\n<style>\nbody { font-family: Arial, sans-serif; background: #fafbfc; color: #222; }\ntable { border-collapse: collapse; width: 100%; margin-top: 1em; }\nth, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }\nth { background: #f3f3f3; }\n.pass { color: #228B22; font-weight: bold; }\n.fail { color: #B22222; font-weight: bold; }\n.skipped { color: #b59a00; font-weight: bold; }\ntr:nth-child(even) { background: #f9f9f9; }\ntr.data-row:hover { background: #e0eaff !important; }\n.bar-container { width: 100%; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; margin: 18px 0 10px 0; border: 1px solid #ccc; display: flex; }\n.bar-pass { background: #228B22; height: 100%; }\n.bar-fail { background: #B22222; height: 100%; }\n.bar-skipped { background: #b59a00; height: 100%; }\n.error-link { color: #0074d9; cursor: pointer; text-decoration: underline; font-size: 0.95em; margin-left: 8px; }\n.error-details { display: none; color: #B22222; font-size: 0.95em; background: #fff8f8; border: 1px solid #f3cccc; border-radius: 4px; margin-top: 4px; padding: 8px; white-space: pre-wrap; }\n</style>\n<script>\nfunction toggleError(id) {\n  var details = document.getElementById('error-details-' + id);\n  var link = document.getElementById('error-link-' + id);\n  if (details.style.display === 'block') {\n    details.style.display = 'none';\n    link.textContent = '(show error)';\n  } else {\n    details.style.display = 'block';\n    link.textContent = '(hide error)';\n  }\n}\n</script>\n</head>\n<body>\n<h2>Test Results Summary</h2>\n<p><b>Timestamp:</b> ${timestamp}</p>\n<p><b>Total run time:</b> ${totalRunTimeStr}</p>\n<p><b>${passedCount}/${totalCount} tests passed</b></p>\n<div class='bar-container'>\n  <div class='bar-pass' style='width:${percentPassed}%' title='Passed: ${passedCount}'></div>\n  <div class='bar-fail' style='width:${percentFailed}%' title='Failed: ${failedCount}'></div>\n  <div class='bar-skipped' style='width:${percentSkipped}%' title='Skipped: ${skippedCount}'></div>\n</div>\n<table>\n<thead><tr><th>Test Name</th><th>Result</th><th>Run Time</th><th>Screenshot</th></tr></thead>\n<tbody>\n`;
+
+  let md = `## 🧪 UI Automation Test Results\n\n`;
+  md += `> 📸 Download all screenshots from the workflow artifacts above.\n\n`;
+  md += `**Timestamp:** ${timestamp}  `;
+  md += `**Total run time:** ${totalRunTimeStr}  `;
+  md += `**${passedCount}/${totalCount} tests passed**\n\n`;
+  md += `| Test Name | Result | Run Time | Screenshot |\n|---|---|---|---|\n`;
   let errorId = 0;
+  for (const r of testResults) {
+    let resultEmoji = r.passed ? '✅' : r.errorMsg === 'Skipped due to header-loads failure.' ? '⚠️ Skipped' : '❌';
+    let runTime = '';
+    if (typeof r.durationMs === 'number') {
+      const seconds = r.durationMs / 1000;
+      if (seconds >= 60) {
+        runTime = (seconds / 60).toFixed(1) + ' min';
+      } else {
+        runTime = seconds.toFixed(2) + 's';
+      }
+    }
+    // Remove screenshot link for PR comment, just show 'Available' if screenshot exists
+    let screenshotCell = '';
+    if (r.screenshotPath && fs.existsSync(r.screenshotPath)) {
+      screenshotCell = 'Available';
+    }
+    let testNameCell = r.name;
+    if (!r.passed && r.errorMsg && resultEmoji !== '⚠️ Skipped') {
+      testNameCell += ` <sup>[error](#error-details-${errorId})</sup>`;
+    }
+    md += `| ${testNameCell} | ${resultEmoji} | ${runTime} | ${screenshotCell} |\n`;
+    errorId++;
+  }
+
+  // Add error details as collapsible sections
+  errorId = 0;
+  for (const r of testResults) {
+    if (!r.passed && r.errorMsg && r.errorMsg !== 'Skipped due to header-loads failure.') {
+      md += `\n<details id="error-details-${errorId}"><summary><b>Error details for ${r.name}</b></summary>\n\n`;
+      md += `\n\u0060\u0060\u0060\n${r.errorMsg.replace(/\r\n/g, '\n').replace(/\r/g, '\n')}\n\u0060\u0060\u0060\n`;
+      md += '</details>\n';
+      errorId++;
+    }
+  }
+
+  md += `\n---\n*Generated by UI automation workflow.*\n`;
+
+  // Write markdown summary for GitHub PR comment
+  const summaryPath = path.join(resultsDir, 'test-results-summary.md');
+  fs.writeFileSync(summaryPath, md);
+
+  // Also write an HTML summary for local viewing (not used by GitHub)
+  let html = `<!DOCTYPE html>\n<html lang='en'>\n<head>\n<meta charset='UTF-8'>\n<title>Test Results Summary</title>\n<style>\nbody { font-family: Arial, sans-serif; background: #fafbfc; color: #222; }\ntable { border-collapse: collapse; width: 100%; margin-top: 1em; }\nth, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }\nth { background: #f3f3f3; }\n.pass { color: #228B22; font-weight: bold; }\n.fail { color: #B22222; font-weight: bold; }\n.skipped { color: #b59a00; font-weight: bold; }\ntr:nth-child(even) { background: #f9f9f9; }\ntr.data-row:hover { background: #e0eaff !important; }\n.bar-container { width: 100%; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; margin: 18px 0 10px 0; border: 1px solid #ccc; display: flex; }\n.bar-pass { background: #228B22; height: 100%; }\n.bar-fail { background: #B22222; height: 100%; }\n.bar-skipped { background: #b59a00; height: 100%; }\n.error-link { color: #0074d9; cursor: pointer; text-decoration: underline; font-size: 0.95em; margin-left: 8px; }\n.error-details { display: none; color: #B22222; font-size: 0.95em; background: #fff8f8; border: 1px solid #f3cccc; border-radius: 4px; margin-top: 4px; padding: 8px; white-space: pre-wrap; }\n</style>\n<script>\nfunction toggleError(id) {\n  var details = document.getElementById('error-details-' + id);\n  var link = document.getElementById('error-link-' + id);\n  if (details.style.display === 'block') {\n    details.style.display = 'none';\n    link.textContent = '(show error)';\n  } else {\n    details.style.display = 'block';\n    link.textContent = '(hide error)';\n  }\n}\n</script>\n</head>\n<body>\n<h2>Test Results Summary</h2>\n<p><b>Timestamp:</b> ${timestamp}</p>\n<p><b>Total run time:</b> ${totalRunTimeStr}</p>\n<p><b>${passedCount}/${totalCount} tests passed</b></p>\n<div class='bar-container'>\n  <div class='bar-pass' style='width:${passedCount/totalCount*100}%' title='Passed: ${passedCount}'></div>\n  <div class='bar-fail' style='width:${failedCount/totalCount*100}%' title='Failed: ${failedCount}'></div>\n  <div class='bar-skipped' style='width:${skippedCount/totalCount*100}%' title='Skipped: ${skippedCount}'></div>\n</div>\n<table>\n<thead><tr><th>Test Name</th><th>Result</th><th>Run Time</th><th>Screenshot</th></tr></thead>\n<tbody>\n`;
+  errorId = 0;
   for (const r of testResults) {
     let resultClass = r.passed ? 'pass' : r.errorMsg === 'Skipped due to header-loads failure.' ? 'skipped' : 'fail';
     let resultText = r.passed ? 'PASS' : r.errorMsg === 'Skipped due to header-loads failure.' ? 'SKIPPED' : 'FAIL';
@@ -486,9 +533,8 @@ const SHOW_REALTIME_LOGS = true;
     }
   }
   html += `</tbody></table>\n</body>\n</html>\n`;
-
-  const summaryPath = path.join(resultsDir, 'test-results-summary.html');
-  fs.writeFileSync(summaryPath, html);
+  const htmlSummaryPath = path.join(resultsDir, 'test-results-summary.html');
+  fs.writeFileSync(htmlSummaryPath, html);
 
   // Open the summary in the default browser (macOS: 'open', Windows: 'cmd /c start "" <file>', Linux: 'xdg-open')
   // Only open the summary if not running as part of multi-governance (SCREENSHOTS_DIR not set)

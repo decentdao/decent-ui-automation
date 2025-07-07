@@ -53,8 +53,18 @@ export class BaseSeleniumTest {
     const options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--log-level=3'); // Suppress most Chrome logs
-    options.addArguments('--headless=new'); // Use new headless mode for CI
+
+    // Allow disabling headless mode via CLI or env
+    const noHeadless = process.argv.includes('--no-headless') || process.env.NO_HEADLESS === '1' || process.env.NO_HEADLESS === 'true';
+    if (!noHeadless) {
+      options.addArguments('--headless=new'); // Use new headless mode for CI
+    } else {
+      console.log('[BaseSeleniumTest] Running in headed (non-headless) mode');
+    }
+
     this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
+    // Set window size to typical desktop resolution to avoid mobile layout
+    await this.driver.manage().window().setRect({ width: 1920, height: 1080 });
   }
 
   async saveScreenshot() {

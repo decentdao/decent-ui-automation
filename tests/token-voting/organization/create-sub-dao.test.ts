@@ -1,4 +1,3 @@
-
 import { testDaos } from '../../../config/test-daos';
 import { BaseSeleniumTest } from '../../base-selenium-test';
 import { By } from 'selenium-webdriver';
@@ -7,7 +6,7 @@ import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
 
 const ORG_PATH = `${pages['organization']}?dao=${testDaos.ERC20.value}&demo_mode=on`;
 
-const test = new BaseSeleniumTest('organization', 'content-loads');
+const test = new BaseSeleniumTest('organization', 'create-sub-dao');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
   // Load the organization page
