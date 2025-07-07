@@ -53,7 +53,7 @@ export class BaseSeleniumTest {
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--log-level=3'); // Suppress most Chrome logs
     // Ensure a unique user-data-dir for each test process to avoid session conflicts in CI
-    const userDataDir = path.join(os.tmpdir(), 'chrome-profile-' + process.pid);
+    const userDataDir = path.join(os.tmpdir(), `chrome-profile-${process.pid}-${Date.now()}-${Math.floor(Math.random()*100000)}`);
     options.addArguments(`--user-data-dir=${userDataDir}`);
     this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
   }
