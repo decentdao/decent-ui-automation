@@ -424,9 +424,10 @@ const wallClockStart = Date.now();
       screenshotCell = 'Available';
     }
     let testNameCell = r.name;
-    if (!r.passed && r.errorMsg && resultEmoji !== '⚠️ Skipped') {
-      testNameCell += ` <sup>[error](#error-details-${errorId})</sup>`;
-    }
+    // Remove the error link for failed tests in Markdown summary
+    // if (!r.passed && r.errorMsg && resultEmoji !== '⚠️ Skipped') {
+    //   testNameCell += ` <sup>[error](#error-details-${errorId})</sup>`;
+    // }
     md += `| ${testNameCell} | ${resultEmoji} | ${runTime} | ${screenshotCell} |\n`;
     errorId++;
   }
