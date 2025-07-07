@@ -235,14 +235,12 @@ const wallClockStart = Date.now();
           proc.stdout.on('data', (data) => {
             const str = data.toString();
             output += str;
-            if (SHOW_REALTIME_LOGS) process.stdout.write(str);
           });
         }
         if (proc.stderr) {
           proc.stderr.on('data', (data) => {
             const str = data.toString();
             error += str;
-            if (SHOW_REALTIME_LOGS) process.stderr.write(str);
           });
         }
         proc.on('close', (code) => {
@@ -251,6 +249,19 @@ const wallClockStart = Date.now();
           const passed = code === 0;
           let screenshotPath = findScreenshotPath(testName);
           let durationMs = Date.now() - start;
+          // Print all buffered output for this test, then the result line
+          if (output.trim()) {
+            process.stdout.write(`\n[${testName}]\n` + output);
+          }
+          if (error.trim()) {
+            process.stderr.write(`\n[${testName} ERROR]\n` + error);
+          }
+          if (passed) {
+            console.log(`${testName}: ${colors.green}pass${colors.reset}`);
+          } else {
+            allPassed = false;
+            console.log(`${testName}: ${colors.red}fail${colors.reset}`);
+          }
           if (!passed) {
             let msgParts = [];
             if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
@@ -268,12 +279,6 @@ const wallClockStart = Date.now();
             testResults.push({ name: testName, passed, errorMsg, screenshotPath, durationMs });
           } else {
             testResults.push({ name: testName, passed, screenshotPath, durationMs });
-          }
-          if (passed) {
-            console.log(`${testName}: ${colors.green}pass${colors.reset}`);
-          } else {
-            allPassed = false;
-            console.log(`${testName}: ${colors.red}fail${colors.reset}`);
           }
           running--;
           resolve();
