@@ -1,6 +1,9 @@
 # Decent UI Automation
 
-This project provides a robust setup for running automated UI regression tests on the Decent webapp using Selenium WebDriver. The project uses TypeScript as the primary coding language.
+This project provides a setup for running automated UI regression tests on the Decent webapp using Selenium WebDriver. The project uses TypeScript as the primary coding language.
+
+NOTE: Tests are currently run in parallel to reduce runtime. The number of parallel tests run is configurable in `test-settings.ts`.
+
 
 ## Getting Started
 
@@ -63,8 +66,11 @@ You can run tests for a specific governance type using the provided scripts:
 
 ## Configuration Files
 
-- Test environments are defined in `config/environments.js`.
-- Update your test imports to use this new path if you add new tests.
+You can configure the following using the files in the `config` directory:
+- The base url used for different environments: develop, production, release
+- The paths used for pages in the app
+- Addresses to specific test DAOs, namely the ones used for erc20, erc721, and multisig
+- Top level test runner settings, such as number of parallel tests to run
 
 ## Test Environments
 
