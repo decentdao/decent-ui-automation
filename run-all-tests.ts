@@ -401,7 +401,7 @@ const wallClockStart = Date.now();
   }
 
   let md = `## 🧪 UI Automation Test Results\n\n`;
-  md += `> 📸 Download all screenshots from the workflow artifacts above.\n\n`;
+  md += `> 📸 Download all screenshots from the workflow artifacts above.\n\nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
   md += `**Timestamp:** ${timestamp}  `;
   md += `**Total run time:** ${totalRunTimeStr}  `;
   md += `**${passedCount}/${totalCount} tests passed**\n\n`;

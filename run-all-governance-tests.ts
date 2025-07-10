@@ -159,7 +159,7 @@ async function runAll() {
   fs.writeFileSync(summaryPath, combinedHtml);
   // Combine all markdown summaries into a single table with governance columns
   const govHeaders = governanceTypes.map(g => g.toUpperCase());
-  let combinedMd = `# 🧪 UI Automation Test Results\n\n> 📸 Download all screenshots from the workflow artifacts above (find the automation check and navigate to 'Upload Test Results').\n\n# Extract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
+  let combinedMd = `# 🧪 UI Automation Test Results\n\n> 📸 Download all screenshots from the workflow artifacts above.\n\nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
   combinedMd += `**Legend:**\n`;
   combinedMd += `\n- Each cell shows: result (✅/❌), run time, and screenshot status.\n`;
   combinedMd += `- Example: \`✅ (2.29s, Available)\` means the test passed, took 2.29 seconds, and a screenshot is available.\n`;
