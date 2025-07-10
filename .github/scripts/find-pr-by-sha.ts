@@ -35,8 +35,6 @@ async function findPR() {
   const pr = prs[0];
   console.log(`Found PR #${pr.number}: ${pr.title}`);
   // Set output for GitHub Actions
-  console.log(`::set-output name=number::${pr.number}`);
-  // For composite actions or reusable workflows, you may want to write to $GITHUB_OUTPUT
   if (process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `number=${pr.number}\n`);
   }
