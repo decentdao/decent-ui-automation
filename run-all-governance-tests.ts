@@ -84,6 +84,10 @@ async function runAll() {
           // Only patch screenshot links that do not already start with the governanceType
           const governanceTypeRegex = new RegExp(`href='screenshots/(?!${governanceType}/)`, 'g');
           html = html.replace(governanceTypeRegex, `href='screenshots/${governanceType}/`);
+          // Patch error toggle IDs to be unique per governance type
+          html = html.replace(/id="error-link-(\d+)"/g, `id="${governanceType}-error-link-$1"`)
+                     .replace(/id="error-details-(\d+)"/g, `id="${governanceType}-error-details-$1"`)
+                     .replace(/toggleError\((\d+)\)/g, `toggleError('${governanceType}', $1)`);
         }
         const timestampMatch = html.match(/<b>Timestamp:<\/b> ([^<]+)<\/p>/);
         if (!firstTimestamp && timestampMatch) firstTimestamp = timestampMatch[1];
@@ -138,6 +142,19 @@ async function runAll() {
   .bar-fail { background: #B22222; height: 100%; }
   .bar-skipped { background: #b59a00; height: 100%; }
   </style>
+  <script>
+  function toggleError(gov, id) {
+    var details = document.getElementById(gov + '-error-details-' + id);
+    var link = document.getElementById(gov + '-error-link-' + id);
+    if (details.style.display === 'block') {
+      details.style.display = 'none';
+      link.textContent = '(show error)';
+    } else {
+      details.style.display = 'block';
+      link.textContent = '(hide error)';
+    }
+  }
+  </script>
   </head><body>\n${summarySection}\n${allSummaries.join('<hr style=\"margin:2em 0\">')}\n</body></html>`;
   fs.writeFileSync(summaryPath, combinedHtml);
   // Combine all markdown summaries into a single table with governance columns
