@@ -4,6 +4,7 @@ This project provides a setup for running automated UI regression tests on the D
 
 NOTE: Tests are currently run in parallel to reduce runtime. The number of parallel tests run is configurable in `test-settings.ts`.
 
+This line of text added just for a "no change" commit. Feel free to remove.
 
 ## Getting Started
 
