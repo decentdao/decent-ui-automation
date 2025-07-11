@@ -4,8 +4,6 @@ This project provides a setup for running automated UI regression tests on the D
 
 NOTE: Tests are currently run in parallel to reduce runtime. The number of parallel tests run is configurable in `test-settings.ts`.
 
-This line of text added just for a "no change" commit. Feel free to remove.
-
 ## Getting Started
 
 1. Install dependencies:
@@ -13,7 +11,7 @@ This line of text added just for a "no change" commit. Feel free to remove.
    npm install
    ```
 2. Ensure you have Chrome and ChromeDriver installed and available in your PATH.
-3. Run all tests:
+3. Run all tests (default behavior - runs all governance types):
    ```sh
    npm test
    ```
@@ -25,24 +23,30 @@ This line of text added just for a "no change" commit. Feel free to remove.
    ```sh
    npm run test:debug
    ```
-   This will run only a small number of tests (5) for faster iteration.
+   This will run only the first 5 tests from each governance type for faster iteration.
+
+## Test Runner Behavior
+
+The test runner has been unified to provide consistent behavior:
+
+- **Default behavior (`npm test`)**: Runs all tests for all governance types (erc20, erc721, multisig) and generates a combined summary
+- **Debug mode (`npm run test:debug`)**: Runs the first 5 tests for all governance types for quick feedback
+- **Single governance**: Run tests for only one governance type using the governance-specific scripts
 
 ## Governance Types
 
 Tests can be run against different governance types supported by the Decent platform:
 
 - **erc20** (token voting)
-- **erc721** (NFT voting)
+- **erc721** (NFT voting)  
 - **multisig** (multi-signature)
-
-By default, all governance types are tested in sequence and results are aggregated into a single summary. You can also run tests for a specific governance type.
 
 ### Running All Governance Types (default)
 
 ```sh
 npm test
 ```
-This will run all tests for `erc20`, `erc721`, and `multisig` governance types, and generate a combined summary in `test-results/test-results-summary.html`.
+This will run all tests for `erc20`, `erc721`, and `multisig` governance types in sequence, and generate a combined summary in `test-results/test-results-summary.html`.
 
 ### Running a Specific Governance Type
 
@@ -109,12 +113,6 @@ You can run tests against any custom base URL by setting the `BASE_URL` environm
 
 ```sh
 BASE_URL=https://your.custom.url npm test
-```
-
-or
-
-```sh
-BASE_URL=https://your.custom.url node run-all-tests.js
 ```
 
 If `BASE_URL` is not set, the test will use the environment specified by `TEST_ENV` (default: `develop`).

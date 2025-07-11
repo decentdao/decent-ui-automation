@@ -4,19 +4,19 @@
   "description": "Automated regression tests for a webapp using Selenium WebDriver in JavaScript.",
   "main": "index.js",
   "scripts": {
-    "test": "ts-node run-all-governance-tests.ts",
+    "test": "ts-node src/run-tests.ts",
     "test:single": "ts-node",
     "build": "tsc",
     "test:develop": "cross-env TEST_ENV=develop npm test",
     "test:production": "cross-env TEST_ENV=production npm test",
     "test:release": "cross-env TEST_ENV=release npm test",
-    "test:debug": "ts-node run-all-tests.ts --debug",
-    "test:erc20": "ts-node run-all-tests.ts --governance=erc20",
-    "test:erc20:debug": "ts-node run-all-tests.ts --governance=erc20 --debug",
-    "test:erc721": "ts-node run-all-tests.ts --governance=erc721",
-    "test:erc721:debug": "ts-node run-all-tests.ts --governance=erc721 --debug",
-    "test:multisig": "ts-node run-all-tests.ts --governance=multisig",
-    "test:multisig:debug": "ts-node run-all-tests.ts --governance=multisig --debug"
+    "test:debug": "ts-node src/run-tests.ts --debug",
+    "test:erc20": "cross-env GOVERNANCE_TYPE=erc20 ts-node",
+    "test:erc20:debug": "cross-env GOVERNANCE_TYPE=erc20 DEBUG=true ts-node",
+    "test:erc721": "cross-env GOVERNANCE_TYPE=erc721 ts-node",
+    "test:erc721:debug": "cross-env GOVERNANCE_TYPE=erc721 DEBUG=true ts-node",
+    "test:multisig": "cross-env GOVERNANCE_TYPE=multisig ts-node",
+    "test:multisig:debug": "cross-env GOVERNANCE_TYPE=multisig DEBUG=true ts-node"
   },
   "dependencies": {
     "selenium-webdriver": "^4.0.0"
