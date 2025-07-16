@@ -6,6 +6,7 @@
   "scripts": {
     "test": "ts-node src/run-tests.ts",
     "test:single": "ts-node",
+    "test:url": "cross-env npm test",
     "build": "tsc",
     "test:develop": "cross-env TEST_ENV=develop npm test",
     "test:production": "cross-env TEST_ENV=production npm test",

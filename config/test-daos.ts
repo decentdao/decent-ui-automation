@@ -1,5 +1,20 @@
 export const testDaos = {
-  ERC20: {
+/*   ERC20: {
+    network: 'eth',
+    address: '0xB98d45F9021D71E6Fc30b43FD37FB3b1Bf12c064',
+    get value(): string { return `${this.network}:${this.address}`; }
+  },
+  ERC721: {
+    network: 'eth',
+    address: '0xB14AC30AA97057e2A934c47BDc45171335B91Bd',
+    get value(): string { return `${this.network}:${this.address}`; }
+  },
+  multisig: {
+    network: 'base',
+    address: '0x5B2396dAbD89D984F251e9fb949Fd9D97Fcb0F2b',
+    get value(): string { return `${this.network}:${this.address}`; }
+  } */
+ERC20: {
     network: 'sep',
     address: '0xB4b01b4Dc5f8d11feD90D760a237BF4D74C3423d',
     get value(): string { return `${this.network}:${this.address}`; }

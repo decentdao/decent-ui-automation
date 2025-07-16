@@ -79,7 +79,7 @@ You can configure the following using the files in the `config` directory:
 
 ## Test Environments
 
-Test environments are defined in `config/environments.js`:
+Test environments are defined in `config/environments.ts`:
 - `develop`: https://develop.decent-interface.pages.dev/
 - `production`: https://app.decentdao.org/
 - `release`: https://release-v0-16-0.decent-interface.pages.dev/
@@ -103,17 +103,29 @@ Use the following npm scripts (now cross-platform with `cross-env`):
 
 > **Note:** The scripts for environment selection use [`cross-env`](https://www.npmjs.com/package/cross-env) for compatibility with Windows and Mac/Linux. This is installed as a dev dependency.
 
-You can add more environments by editing `config/environments.js`.
+You can add more environments by editing `config/environments.ts`.
 
 ### Overriding the Base URL
 
-You can run tests against any custom base URL by setting the `BASE_URL` environment variable when running tests. This overrides the environment selection in `config/environments.js`.
+You can run tests against any custom base URL by setting the `BASE_URL` environment variable when running tests. This overrides the environment selection in `config/environments.ts`.
 
-**Example:**
+**Simple approach (recommended):**
 
 ```sh
-BASE_URL=https://your.custom.url npm test
+npm run test:url BASE_URL=https://your.custom.url
 ```
+
+**Alternative approaches:**
+
+- On macOS/Linux:
+  ```sh
+  BASE_URL=https://your.custom.url npm test
+  ```
+
+- Cross-platform using npx:
+  ```sh
+  npx cross-env BASE_URL=https://your.custom.url npm test
+  ```
 
 If `BASE_URL` is not set, the test will use the environment specified by `TEST_ENV` (default: `develop`).
 

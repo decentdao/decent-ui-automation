@@ -5,6 +5,7 @@ import { BaseSeleniumTest } from '../../base-selenium-test';
 import { By } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 
+// NOTE: This test has been modified to specifically work with multisig DAOs
 
 // Parse governance type from CLI args
 const governanceArg = process.argv.find(arg => arg.startsWith('--governance='));

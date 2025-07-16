@@ -15,7 +15,7 @@ BaseSeleniumTest.run(async (test) => {
   await createProposalBtn.click();
   const useDappsOption = await test.waitForElement(By.css('[data-testid="optionMenu-Use dApps"]'), 10000);
   // Add a short delay to improve reliability
-  await test.driver!.sleep(300);
+  await test.driver!.sleep(500);
   await useDappsOption.click();
   // Confirm the CoW Swap image is present
   await test.waitForElement(By.css('img[alt="CoW Swap"]'), 10000);

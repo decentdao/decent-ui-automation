@@ -28,7 +28,3 @@ export function appendFlagsToUrl(url: string): string {
   const finalUrl = paramStr ? `${base}?${paramStr}` : base;
   return finalUrl;
 }
-
-export {};
-
-export {};
