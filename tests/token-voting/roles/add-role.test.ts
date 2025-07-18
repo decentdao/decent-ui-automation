@@ -15,12 +15,12 @@ BaseSeleniumTest.run(async (test) => {
   const rolesPath = `${pages['roles']}?dao=${getTestDao(governanceType).value}&demo_mode=on`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + rolesPath));
   // Click the button with text "Edit Roles"
-  const editRolesBtn = await test.waitForElement(By.xpath("//button[contains(., 'Edit Roles')]"), 10000);
+  const editRolesBtn = await test.waitForElement(By.xpath("//button[contains(., 'Edit Roles')]"));
   await editRolesBtn.click();
   // Click the button with text "Add Role"
-  const addRoleBtn = await test.waitForElement(By.xpath("//button[contains(., 'Add Role')]"), 10000);
+  const addRoleBtn = await test.waitForElement(By.xpath("//button[contains(., 'Add Role')]"));
   await addRoleBtn.click();
   // Wait for the input with data-testid="role-name"
-  await test.waitForElement(By.css('input[data-testid="role-name"]'), 10000);
+  await test.waitForElement(By.css('input[data-testid="role-name"]'));
   console.log('Add Role flow loaded and role name input found.');
 }, test);

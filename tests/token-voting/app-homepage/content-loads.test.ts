@@ -8,6 +8,6 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   await test.driver!.get(appendFlagsToUrl(getBaseUrl()));
   // Confirm the search input is present
-  await test.waitForElement(By.css('[data-testid="search-input"]'), 10000);
+  await test.waitForElement(By.css('[data-testid="search-input"]'));
   console.log('App homepage loaded and search input found.');
 }, test);

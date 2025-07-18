@@ -15,7 +15,7 @@ BaseSeleniumTest.run(
     await test.start();
     const pagePath = `${pages['treasury']}?dao=${getTestDao(governanceType).value}`;
     await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pagePath));
-    const logo = await test.waitForElement(By.css('[data-testid="navigationLogo-homeLink"]'), 10000);
+    const logo = await test.waitForElement(By.css('[data-testid="navigationLogo-homeLink"]'));
     const isDisplayed = await logo.isDisplayed();
     if (!isDisplayed) {
       throw new Error('Logo is not visible on the Treasury page!');

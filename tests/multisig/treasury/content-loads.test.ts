@@ -10,6 +10,6 @@ BaseSeleniumTest.run(async (test) => {
   const pagePath = `${pages['treasury']}?dao=${getTestDao('multisig').value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pagePath));
   // Wait for the Hats Protocol v1 image to appear
-  await test.waitForElement(By.css('img[alt="Hats Protocol v1"]'), 10000);
+  await test.waitForElement(By.css('img[alt="Hats Protocol v1"]'));
   console.log('Treasury page loaded and Hats Protocol v1 image found.');
 }, test);

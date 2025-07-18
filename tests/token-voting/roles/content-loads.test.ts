@@ -16,7 +16,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   const rolesPath = `${pages['roles']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + rolesPath));
-  // Confirm the image with the given alt is present (wait up to 20000ms)
-  await test.waitForElement(By.css('img[alt="0xAf3ee09F37ead9F28a05AeF0d09841BC9A6Fe8e9"]'), 20000);
+  // Confirm the image with the given alt is present (needs extra time to load)
+  await test.waitForElement(By.css('img[alt="0xAf3ee09F37ead9F28a05AeF0d09841BC9A6Fe8e9"]'), { extra: 10000 });
   console.log('Roles page loaded and image with correct alt found.');
 }, test);

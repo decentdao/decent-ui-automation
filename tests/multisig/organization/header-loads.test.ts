@@ -12,7 +12,7 @@ BaseSeleniumTest.run(
   async (test) => {
     await test.start();
     await test.driver!.get(appendFlagsToUrl(getBaseUrl() + PAGE_PATH));
-    const logo = await test.waitForElement(By.css('[data-testid="navigationLogo-homeLink"]'), 10000);
+    const logo = await test.waitForElement(By.css('[data-testid="navigationLogo-homeLink"]'));
     const isDisplayed = await logo.isDisplayed();
     if (!isDisplayed) {
       throw new Error('Logo is not visible on the Organization page!');

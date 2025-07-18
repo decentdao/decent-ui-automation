@@ -13,7 +13,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
-  const logo = await test.waitForElement(By.css('[data-testid="navigationLogo-homeLink"]'), 10000);
+  const logo = await test.waitForElement(By.css('[data-testid="navigationLogo-homeLink"]'));
   const isDisplayed = await logo.isDisplayed();
   if (!isDisplayed) {
     throw new Error('Logo is not visible on the DAO homepage!');

@@ -7,6 +7,6 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + '/create/essentials'));
   // Wait for the essentials DAO name input to appear
-  await test.waitForElement(By.css('[data-testid="essentials-daoName"]'), 10000);
+  await test.waitForElement(By.css('[data-testid="essentials-daoName"]'));
   console.log('Create DAO essentials page loaded and DAO name input found.');
 }, test);

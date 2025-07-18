@@ -13,6 +13,6 @@ BaseSeleniumTest.run(async (test) => {
   // Load the organization page
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + ORG_PATH));
   // Confirm the toggle favorite Safes button is present
-  await test.waitForElement(By.css('[aria-label="Toggle your favorite Safes."]'), 10000);
+  await test.waitForElement(By.css('[aria-label="Toggle your favorite Safes."]'));
   console.log('Organization page loaded and favorite Safes toggle button found.');
 }, test);

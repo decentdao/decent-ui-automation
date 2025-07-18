@@ -13,6 +13,6 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + CREATE_PROPOSAL_PATH));
   // Confirm the metadata title field is present
-  await test.waitForElement(By.css('[data-testid="metadata.title"]'), 10000);
+  await test.waitForElement(By.css('[data-testid="metadata.title"]'));
   console.log('Create Proposal page loaded and metadata title field found.');
 }, test);

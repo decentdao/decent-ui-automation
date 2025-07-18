@@ -18,8 +18,8 @@ BaseSeleniumTest.run(async (test) => {
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   
-  // Find the first proposal link and extract the hash from its displayed text
-  const proposalLink = await test.waitForElement(By.css('a[href^="/proposals/"]'), 20000);
+  // Find the first proposal link (needs extra time to load)
+  const proposalLink = await test.waitForElement(By.css('a[href^="/proposals/"]'), { extra: 10000 });
   const proposalText = await proposalLink.getText();
   
   // Look for hash pattern: # followed by alphanumeric characters (like #4824 or #4a59)
@@ -31,6 +31,6 @@ BaseSeleniumTest.run(async (test) => {
   await test.driver!.sleep(500);
   
   // Wait for the proposal hash to appear on the overview page (should be in title, not breadcrumbs)
-  await test.waitForElement(By.xpath(`//*[contains(text(), '${proposalHash}')]`), 10000);
+  await test.waitForElement(By.xpath(`//*[contains(text(), '${proposalHash}')]`));
   console.log(`Proposal overview page loaded and found ${proposalHash}.`);
 }, test);

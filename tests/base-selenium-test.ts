@@ -2,6 +2,7 @@ import { Builder, By, until, WebDriver, WebElement, Locator } from 'selenium-web
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { defaultElementWaitTime } from './test-helpers';
 
 export class BaseSeleniumTest {
   pageName: string;
@@ -114,23 +115,31 @@ export class BaseSeleniumTest {
     });
   }
 
-  async waitForElement(locator: Locator, timeout = 5000): Promise<WebElement> {
+  async waitForElement(locator: Locator, timeout: number | { extra: number } = defaultElementWaitTime): Promise<WebElement> {
     if (!this.driver) throw new Error('Driver not started');
-    return await this.driver.wait(until.elementLocated(locator), timeout);
+    
+    let actualTimeout: number;
+    if (typeof timeout === 'object' && 'extra' in timeout) {
+      actualTimeout = defaultElementWaitTime + timeout.extra;
+    } else {
+      actualTimeout = timeout as number;
+    }
+    
+    return await this.driver.wait(until.elementLocated(locator), actualTimeout);
   }
 
-  async clickElement(locator: Locator, timeout = 5000): Promise<WebElement> {
+  async clickElement(locator: Locator, timeout: number | { extra: number } = defaultElementWaitTime): Promise<WebElement> {
     const el = await this.waitForElement(locator, timeout);
     await el.click();
     return el;
   }
 
-  async getElementText(locator: Locator, timeout = 5000): Promise<string> {
+  async getElementText(locator: Locator, timeout: number | { extra: number } = defaultElementWaitTime): Promise<string> {
     const el = await this.waitForElement(locator, timeout);
     return await el.getText();
   }
 
-  async getElementAttribute(locator: Locator, attr: string, timeout = 5000): Promise<string> {
+  async getElementAttribute(locator: Locator, attr: string, timeout = defaultElementWaitTime): Promise<string> {
     const el = await this.waitForElement(locator, timeout);
     return await el.getAttribute(attr);
   }

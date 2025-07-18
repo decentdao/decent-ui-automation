@@ -16,6 +16,6 @@ BaseSeleniumTest.run(async (test) => {
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Confirm the settings button is present
-  await test.waitForElement(By.css('[aria-label="Manage DAO"]'), 10000);
+  await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   console.log('DAO homepage loaded and settings button found.');
 }, test);

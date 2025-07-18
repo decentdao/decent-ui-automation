@@ -17,9 +17,9 @@ BaseSeleniumTest.run(async (test) => {
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Step 2: Click the 'Manage DAO' button
-  const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'), 10000);
+  const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   await manageBtn.click();
   // Step 3: Wait for the 'General' text in the modal
-  await test.waitForElement(By.xpath("//p[text()='General']"), 10000);
+  await test.waitForElement(By.xpath("//p[text()='General']"));
   console.log('Settings modal opened and "General" text found.');
 }, test);

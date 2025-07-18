@@ -13,7 +13,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + DAO_HOME_PATH));
   // Confirm the settings button is present
-  await test.waitForElement(By.css('[aria-label="Manage DAO"]'), 10000);
+  await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   console.log('DAO homepage loaded and settings button found (multisig).');
 }, test);
 

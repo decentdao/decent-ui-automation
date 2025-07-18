@@ -1,8 +1,11 @@
 import { environments } from '../config/environments';
+import { defaultElementWaitTime } from '../config/test-settings';
 
 export function getEnv() {
   return process.env.TEST_ENV || 'develop';
 }
+
+export { defaultElementWaitTime };
 
 
 export function getBaseUrl() {

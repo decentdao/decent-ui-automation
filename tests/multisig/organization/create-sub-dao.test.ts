@@ -12,9 +12,9 @@ BaseSeleniumTest.run(async (test) => {
   // Load the organization page
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + ORG_PATH));
   // Wait for the Create SubDAO button and click it
-  const createBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create SubDAO')]"), 10000);
+  const createBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create SubDAO')]"));
   await createBtn.click();
   // Wait for the input with data-testid="essentials-daoName"
-  await test.waitForElement(By.css('input[data-testid="essentials-daoName"]'), 10000);
+  await test.waitForElement(By.css('input[data-testid="essentials-daoName"]'));
   console.log('Create SubDAO flow loaded and DAO name input found.');
 }, test);
