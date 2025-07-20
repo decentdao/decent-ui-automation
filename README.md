@@ -1,170 +1,103 @@
 # Decent UI Automation
 
-This project provides a setup for running automated UI regression tests on the Decent webapp using Selenium WebDriver. The project uses TypeScript as the primary coding language.
+Automated UI regression testing for the Decent webapp using Selenium WebDriver and TypeScript.
 
-NOTE: Tests are currently run in parallel to reduce runtime. The number of parallel tests run is configurable in `test-settings.ts`.
+## Quick Start
 
-This line has been added for testing purposes for a "no change" commit. Feel free to delete this line.
-
-## Getting Started
-
-1. Install dependencies:
+1. **Install dependencies:**
    ```sh
    npm install
    ```
-2. Ensure you have Chrome and ChromeDriver installed and available in your PATH.
-3. Run all tests (default behavior - runs all governance types):
+
+2. **Run all tests:**
    ```sh
    npm test
    ```
-4. Run a specific test file (cross-platform):
-   ```sh
-   npm run test:single -- tests/app-homepage/header-loads.test.ts
-   ```
-5. **Run only a subset of tests for quick feedback (debug mode):**
-   ```sh
-   npm run test:debug
-   ```
-   This will run only the first 5 tests from each governance type for faster iteration.
 
-## Test Runner Behavior
+## Running Tests
 
-The test runner has been unified to provide consistent behavior:
+### Basic Commands
 
-- **Default behavior (`npm test`)**: Runs all tests for all governance types (erc20, erc721, multisig) and generates a combined summary
-- **Debug mode (`npm run test:debug`)**: Runs the first 5 tests for all governance types for quick feedback
-- **Single governance**: Run tests for only one governance type using the governance-specific scripts
+| Command | Description |
+|---------|-------------|
+| `npm test` | Run all tests for all governance types (default) |
+| `npm run test:debug` | Quick feedback - first 5 tests per governance type |
+| `npm run test:single -- <file>` | Run a specific test file |
 
-## Governance Types
+### Governance Types
 
-Tests can be run against different governance types supported by the Decent platform:
-
-- **erc20** (token voting)
-- **erc721** (NFT voting)  
-- **multisig** (multi-signature)
-
-### Running All Governance Types (default)
+Run tests for specific governance types:
 
 ```sh
-npm test
+npm run test:erc20     # Token voting
+npm run test:erc721    # NFT voting  
+npm run test:multisig  # Multi-signature
 ```
-This will run all tests for `erc20`, `erc721`, and `multisig` governance types in sequence, and generate a combined summary in `test-results/test-results-summary.html`.
 
-### Running a Specific Governance Type
+### Environments
 
-You can run tests for a specific governance type using the provided scripts:
+Run tests against different environments:
 
-- **ERC20:**
-  ```sh
-  npm run test:erc20
-  ```
-- **ERC721:**
-  ```sh
-  npm run test:erc721
-  ```
-- **Multisig:**
-  ```sh
-  npm run test:multisig
-  ```
+```sh
+npm run test:develop     # https://develop.decent-interface.pages.dev/ (default)
+npm run test:production  # https://app.decentdao.org/
+npm run test:release     # https://release-v0-16-0.decent-interface.pages.dev/
+```
 
-## Customizing
-- Add more test files in the `tests/` directory.
-- Update the test scripts in `package.json` as needed.
+### Custom Base URL
 
-## Configuration Files
-
-You can configure the following using the files in the `config` directory:
-- The base url used for different environments: develop, production, release
-- The paths used for pages in the app
-- Addresses to specific test DAOs, namely the ones used for erc20, erc721, and multisig
-- Top level test runner settings, such as number of parallel tests to run
-
-## Test Environments
-
-Test environments are defined in `config/environments.ts`:
-- `develop`: https://develop.decent-interface.pages.dev/
-- `production`: https://app.decentdao.org/
-- `release`: https://release-v0-16-0.decent-interface.pages.dev/
-
-### Running Tests for a Specific Environment
-
-Use the following npm scripts (now cross-platform with `cross-env`):
-
-- Develop (default):
-  ```sh
-  npm run test:develop
-  ```
-- Production:
-  ```sh
-  npm run test:production
-  ```
-- Release:
-  ```sh
-  npm run test:release
-  ```
-
-> **Note:** The scripts for environment selection use [`cross-env`](https://www.npmjs.com/package/cross-env) for compatibility with Windows and Mac/Linux. This is installed as a dev dependency.
-
-You can add more environments by editing `config/environments.ts`.
-
-### Overriding the Base URL
-
-You can run tests against any custom base URL by setting the `BASE_URL` environment variable when running tests. This overrides the environment selection in `config/environments.ts`.
-
-**Simple approach (recommended):**
+Override the environment with a custom URL:
 
 ```sh
 npm run test:url BASE_URL=https://your.custom.url
 ```
 
-**Alternative approaches:**
+**Alternative methods:**
+- macOS/Linux: `BASE_URL=https://your.custom.url npm test`
+- Cross-platform: `npx cross-env BASE_URL=https://your.custom.url npm test`
 
-- On macOS/Linux:
-  ```sh
-  BASE_URL=https://your.custom.url npm test
-  ```
+### Feature Flags
 
-- Cross-platform using npx:
-  ```sh
-  npx cross-env BASE_URL=https://your.custom.url npm test
-  ```
+Pass custom flags to all tests as URL parameters:
 
-If `BASE_URL` is not set, the test will use the environment specified by `TEST_ENV` (default: `develop`).
-
-### Passing Custom Flags to All Tests
-
-You can pass custom flags as URL parameters to all tests using the `--flags` argument (or as a bare value) when running the test runner. These flags will be appended to the test URLs and are accessible in your tests for feature toggles, debug options, or other custom behaviors.
-
-**Usage Examples:**
-
-- With the npm test script:
-  ```sh
-  npm test -- --flags=flag_feature_1=on,flag_dev=on
-  ```
-- With a bare value (no --flags= prefix):
-  ```sh
-  npm test -- myflag1+myflag2
-  ```
-- With a specific test file:
-  ```sh
-  npm run test:single -- tests/app-homepage/header-loads.test.ts --flags=flag_feature_1=on
-  ```
-
-**Flag Delimiters:**
-- Flags can be separated by commas, spaces, or plus signs (`,` ` ` `+`).
-- All flags will be merged and appended to the test URLs as query parameters.
-
-**How it works:**
-- The test runner sets the `TEST_FLAGS` environment variable for each test process.
-- All test files use a helper to append these flags to the URLs they load.
-- Any flag passed will be visible in the URLs visited by Selenium.
-
-**Example:**
-If you run:
 ```sh
-npm test -- --flags=flag_feature_1=on,flag_dev=on
+npm test -- --flags=feature_1=on,debug=on
+npm test -- feature_1+debug              # Alternative syntax
+npm run test:single -- tests/app-homepage/header-loads.test.ts --flags=feature_1=on
 ```
-All test URLs will include `?flags=flag_feature_1=on,flag_dev=on` (or merged with existing params).
 
-See `tests/test-helpers.ts` for details on how flags are parsed and appended.
+**Flag formats:** Comma, space, or plus-separated (`flag1,flag2` or `flag1+flag2`)
+
+## Configuration
+
+Configure test behavior via files in the `config/` directory:
+
+- **environments.ts** - Base URLs for different environments
+- **pages.ts** - Page paths within the app
+- **test-daos.ts** - DAO addresses for each governance type
+- **test-settings.ts** - Test runner settings (parallelism, timeouts)
+
+## Project Structure
+
+```
+tests/
+├── multisig/           # Multi-signature governance tests
+├── token-voting/       # ERC20/ERC721 governance tests  
+└── base-selenium-test.ts
+
+config/
+├── environments.ts     # Environment URLs
+├── pages.ts           # Page routes
+├── test-daos.ts       # Test DAO addresses
+└── test-settings.ts   # Test configuration
+
+test-results/          # Generated test reports and screenshots
+```
+
+## Development
+
+- **Chrome & ChromeDriver** must be installed and in PATH
+- Tests run in **parallel** by default (configurable in `test-settings.ts`)
+- **Screenshots** are automatically captured on test completion
+- **Combined HTML reports** generated for multi-governance runs
 
