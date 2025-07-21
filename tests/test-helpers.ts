@@ -1,4 +1,4 @@
-import { environments } from '../config/environments';
+import { environments, getEnvironmentUrl, initializeReleaseUrl } from '../config/environments';
 import { defaultElementWaitTime } from '../config/test-settings';
 
 export function getEnv() {
@@ -7,10 +7,44 @@ export function getEnv() {
 
 export { defaultElementWaitTime };
 
+export function displayBaseUrlInfo() {
+  const env = getEnv();
+  const baseUrl = getBaseUrl();
+  const source = process.env.BASE_URL ? 'BASE_URL override' : `${env} environment`;
+  console.log(`[test-runner] Using ${source}: ${baseUrl}`);
+  return { env, baseUrl, source };
+}
 
 export function getBaseUrl() {
   const ENV = getEnv();
-  return (process.env.BASE_URL || environments[ENV]).replace(/\/$/, '');
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL.replace(/\/$/, '');
+  }
+  
+  if (ENV === 'release') {
+    // For release environment, synchronously get the URL that was pre-fetched and stored in env var
+    const releaseUrl = process.env.RELEASE_URL;
+    if (!releaseUrl) {
+      throw new Error('Release URL not available. The test runner should have set RELEASE_URL environment variable.');
+    }
+    return releaseUrl.replace(/\/$/, '');
+  }
+  
+  return (environments[ENV] || environments.develop).replace(/\/$/, '');
+}
+
+export async function getBaseUrlAsync(): Promise<string> {
+  const ENV = getEnv();
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL.replace(/\/$/, '');
+  }
+  
+  if (ENV === 'release') {
+    await initializeReleaseUrl();
+  }
+  
+  const envUrl = await getEnvironmentUrl(ENV);
+  return envUrl.replace(/\/$/, '');
 }
 
 // Helper to append flags as URL parameters

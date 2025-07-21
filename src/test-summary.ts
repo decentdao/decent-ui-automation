@@ -17,10 +17,11 @@ export interface SummaryOptions {
   wallClockDuration?: number;
   openSummary?: boolean;
   skipMarkdown?: boolean;
+  baseUrl?: string;
 }
 
 export function generateTestSummary(testResults: TestResult[], options: SummaryOptions): void {
-  const { resultsDir, governanceType, timestamp, totalRunTimeStr, openSummary = true, skipMarkdown = false } = options;
+  const { resultsDir, governanceType, timestamp, totalRunTimeStr, openSummary = true, skipMarkdown = false, baseUrl } = options;
   
   if (!fs.existsSync(resultsDir)) {
     fs.mkdirSync(resultsDir, { recursive: true });
@@ -72,12 +73,16 @@ function generateMarkdownSummary(testResults: TestResult[], options: {
   totalCount: number;
   timestamp: string;
   totalRunTimeStr: string;
+  baseUrl?: string;
 }): void {
-  const { resultsDir, passedCount, totalCount, timestamp, totalRunTimeStr } = options;
+  const { resultsDir, passedCount, totalCount, timestamp, totalRunTimeStr, baseUrl } = options;
 
   let md = `## 🧪 UI Automation Test Results\n\n`;
   md += `> 📸 Download all screenshots from the workflow artifacts above.\n\nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
-  md += `**Timestamp:** ${timestamp}  `;
+  md += `**Timestamp:** ${timestamp}  \n`;
+  if (baseUrl) {
+    md += `**Base URL:** ${baseUrl}  \n`;
+  }
   md += `**Total run time:** ${totalRunTimeStr}  `;
   md += `**${passedCount}/${totalCount} tests passed**\n\n`;
   md += `| Test Name | Result | Run Time | Screenshot |\n|---|---|---|---|\n`;
@@ -132,8 +137,9 @@ function generateHtmlSummary(testResults: TestResult[], options: {
   timestamp: string;
   totalRunTimeStr: string;
   governanceType?: string;
+  baseUrl?: string;
 }): void {
-  const { resultsDir, passedCount, totalCount, failedCount, skippedCount, timestamp, totalRunTimeStr, governanceType } = options;
+  const { resultsDir, passedCount, totalCount, failedCount, skippedCount, timestamp, totalRunTimeStr, governanceType, baseUrl } = options;
 
   let html = `<!DOCTYPE html>\n<html lang='en'>\n<head>\n<meta charset='UTF-8'>\n<title>Test Results Summary</title>\n<style>\nbody { font-family: Arial, sans-serif; background: #fafbfc; color: #222; }\ntable { border-collapse: collapse; width: 100%; margin-top: 1em; }\nth, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }\nth { background: #f3f3f3; }\n.pass { color: #228B22; font-weight: bold; }\n.fail { color: #B22222; font-weight: bold; }\n.skipped { color: #b59a00; font-weight: bold; }\ntr:nth-child(even) { background: #f9f9f9; }\ntr.data-row:hover { background: #e0eaff !important; }\n.bar-container { width: 100%; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; margin: 18px 0 10px 0; border: 1px solid #ccc; display: flex; }\n.bar-pass { background: #228B22; height: 100%; }\n.bar-fail { background: #B22222; height: 100%; }\n.bar-skipped { background: #b59a00; height: 100%; }\n.error-link { color: #0074d9; cursor: pointer; text-decoration: underline; font-size: 0.95em; margin-left: 8px; }\n.error-details { display: none; color: #B22222; font-size: 0.95em; background: #fff8f8; border: 1px solid #f3cccc; border-radius: 4px; margin-top: 4px; padding: 8px; white-space: pre-wrap; }\n</style>\n<script>\n`;
 
@@ -143,7 +149,7 @@ function generateHtmlSummary(testResults: TestResult[], options: {
     html += `function toggleError(id) {\n  var details = document.getElementById('error-details-' + id);\n  var link = document.getElementById('error-link-' + id);\n  if (details.style.display === 'block') {\n    details.style.display = 'none';\n    link.textContent = '(show error)';\n  } else {\n    details.style.display = 'block';\n    link.textContent = '(hide error)';\n  }\n}\n`;
   }
 
-  html += `</script>\n</head>\n<body>\n<h2>Test Results Summary</h2>\n<p><b>Timestamp:</b> ${timestamp}</p>\n<p><b>Total run time:</b> ${totalRunTimeStr}</p>\n<p><b>${passedCount}/${totalCount} tests passed</b></p>\n<div class='bar-container'>\n  <div class='bar-pass' style='width:${passedCount/totalCount*100}%' title='Passed: ${passedCount}'></div>\n  <div class='bar-fail' style='width:${failedCount/totalCount*100}%' title='Failed: ${failedCount}'></div>\n  <div class='bar-skipped' style='width:${skippedCount/totalCount*100}%' title='Skipped: ${skippedCount}'></div>\n</div>\n<table>\n<thead><tr><th>Test Name</th><th>Result</th><th>Run Time</th><th>Screenshot</th></tr></thead>\n<tbody>\n`;
+  html += `</script>\n</head>\n<body>\n<h2>Test Results Summary</h2>\n<p><b>Timestamp:</b> ${timestamp}</p>\n${baseUrl ? `<p><b>Base URL:</b> ${baseUrl}</p>\n` : ''}<p><b>Total run time:</b> ${totalRunTimeStr}</p>\n<p><b>${passedCount}/${totalCount} tests passed</b></p>\n<div class='bar-container'>\n  <div class='bar-pass' style='width:${passedCount/totalCount*100}%' title='Passed: ${passedCount}'></div>\n  <div class='bar-fail' style='width:${failedCount/totalCount*100}%' title='Failed: ${failedCount}'></div>\n  <div class='bar-skipped' style='width:${skippedCount/totalCount*100}%' title='Skipped: ${skippedCount}'></div>\n</div>\n<table>\n<thead><tr><th>Test Name</th><th>Result</th><th>Run Time</th><th>Screenshot</th></tr></thead>\n<tbody>\n`;
 
   let errorId = 0;
   for (const r of testResults) {
@@ -200,7 +206,8 @@ export async function generateCombinedSummary(
   totalSkipped: number,
   totalDuration: number,
   resultsDir: string,
-  allSummaries: string[]
+  allSummaries: string[],
+  baseUrl?: string
 ): Promise<void> {
   try {
     const governanceTypes = Object.keys(resultsByGov); // Use actual governance types that have data
@@ -223,7 +230,7 @@ export async function generateCombinedSummary(
   const summarySection = `
   <h2>All Governance Test Results Summary</h2>
   <p><b>Start Timestamp:</b> ${firstTimestamp}</p>
-  <p><b>Cumulative run time:</b> ${totalRunTimeStr}</p>
+  ${baseUrl ? `<p><b>Base URL:</b> ${baseUrl}</p>\n  ` : ''}<p><b>Cumulative run time:</b> ${totalRunTimeStr}</p>
   <p><b>${totalPassed}/${totalCount} tests passed</b></p>
   <div class='bar-container'>
     <div class='bar-pass' style='width:${percentPassed}%' title='Passed: ${totalPassed}'></div>
@@ -309,7 +316,8 @@ export async function generateCombinedSummary(
     combinedMd += `| ${row.join(' | ')} |\n`;
   }
 
-  const mdSummaryStats = `**Summary:** ${mdTotalPassed}/${mdTotalCount} tests passed | Total runtime: ${wallClockRunTimeStr}\n\n`;
+  const baseUrlInfo = baseUrl ? `**Base URL:** ${baseUrl}  \n` : '';
+  const mdSummaryStats = `${baseUrlInfo}**Summary:** ${mdTotalPassed}/${mdTotalCount} tests passed | Total runtime: ${wallClockRunTimeStr}\n\n`;
   combinedMd = combinedMd.replace('# 🧪 UI Automation Test Results\n\n', `# 🧪 UI Automation Test Results\n\n${mdSummaryStats}`);
   combinedMd += `\n---\n*Generated by UI automation workflow.*\n`;
   

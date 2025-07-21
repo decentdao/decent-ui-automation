@@ -1,26 +1,45 @@
 // Unified test runner - handles both single governance and all governance types
+import { initializeReleaseUrl, getEnvironmentUrl } from '../config/environments';
+
 // Robust argument parsing: collect CLI args from process.argv, npm_config_argv, and npm_lifecycle_script
 function getAllCliArgs(): string[] {
   const args: string[] = [];
+  
   // 1. process.argv (direct node/ts-node invocation)
   if (process.argv && process.argv.length > 2) {
     args.push(...process.argv.slice(2));
   }
-  // 2. npm_config_argv (npm run ... -- ...)
+  
+  // 2. npm_config_* environment variables (npm run ... -- --flag becomes npm_config_flag=true)
+  Object.keys(process.env).forEach(key => {
+    if (key.startsWith('npm_config_') && !key.match(/^npm_config_(cache|globalconfig|global_prefix|init_module|local_prefix|node_gyp|noproxy|npm_version|prefix|userconfig|user_agent)$/)) {
+      const flagName = key.replace('npm_config_', '');
+      const value = process.env[key];
+      if (value === 'true') {
+        args.push(`--${flagName}`);
+      } else if (value && value !== 'false') {
+        args.push(`--${flagName}=${value}`);
+      }
+    }
+  });
+  
+  // 3. npm_config_argv (npm run ... -- ...)
   if (process.env.npm_config_argv) {
     try {
       const npmArgv = JSON.parse(process.env.npm_config_argv);
       if (npmArgv && Array.isArray(npmArgv.original)) {
-        // Remove the script name (e.g., 'test:erc721')
+        // For npm scripts, we want everything after the script name and "--"
         const orig = npmArgv.original;
-        // Find the first arg that starts with '-' or ends with .ts
-        let firstFlagIdx = orig.findIndex((a: string) => a.startsWith('-') || a.endsWith('.ts'));
-        if (firstFlagIdx === -1) firstFlagIdx = 1;
-        args.push(...orig.slice(firstFlagIdx));
+        const dashDashIndex = orig.indexOf('--');
+        if (dashDashIndex !== -1 && dashDashIndex < orig.length - 1) {
+          // Take everything after "--"
+          args.push(...orig.slice(dashDashIndex + 1));
+        }
       }
     } catch {}
   }
-  // 3. npm_lifecycle_script (sometimes contains the full script line)
+  
+  // 4. npm_lifecycle_script (sometimes contains the full script line)
   if (process.env.npm_lifecycle_script) {
     const scriptLine = process.env.npm_lifecycle_script;
     // Extract args after the script name
@@ -31,6 +50,7 @@ function getAllCliArgs(): string[] {
       if (parts) args.push(...parts.map(s => s.replace(/^['"]|['"]$/g, '')));
     }
   }
+  
   // Remove duplicates
   return [...new Set(args)];
 }
@@ -47,21 +67,73 @@ const tsNodeBin = path.join(process.cwd(), 'node_modules', '.bin', process.platf
 // Declare resultsDir at the top for use throughout the file
 const resultsDir = path.join(process.cwd(), 'test-results');
 
+// Use clean environment for local development only (not remote and not in child processes)
+const isChildProcess = argv.some(arg => arg.startsWith('--governance='));
+
+if (!isChildProcess) {
+  console.log('[run-tests] Using environment as-is');
+}
+
 // Check if this should run all governance types (default behavior)
 const debugMode = argv.some(arg => arg === '--debug' || arg === 'debug');
 const governanceArg = argv.find(arg => arg.startsWith('--governance='));
-const singleGovernanceMode = !!governanceArg;
+const testFileArgs = argv.filter(arg => arg.endsWith('.test.ts'));
+
+// Handle --env= argument
+const envArg = argv.find(arg => arg.startsWith('--env='));
+const testEnv = envArg ? envArg.split('=')[1] : 'develop';
+
+// Set TEST_ENV for backward compatibility with existing code
+process.env.TEST_ENV = testEnv;
+if (testEnv !== 'develop') {
+  console.log(`[run-tests] Environment set to: ${testEnv}`);
+}
+
+// If a specific test file is provided, determine governance type from path and use single governance mode
+let singleGovernanceMode = !!governanceArg;
+if (!singleGovernanceMode && testFileArgs.length > 0) {
+  // Auto-detect governance type from test file path
+  const testFile = testFileArgs[0];
+  if (testFile.includes('multisig/') || testFile.includes('multisig\\') || testFile.includes('/multisig/') || testFile.includes('\\multisig\\')) {
+    argv.push('--governance=multisig');
+    singleGovernanceMode = true;
+  } else if (testFile.includes('token-voting/') || testFile.includes('token-voting\\') || testFile.includes('/token-voting/') || testFile.includes('\\token-voting\\')) {
+    argv.push('--governance=erc20');
+    singleGovernanceMode = true;
+  }
+}
 
 // If not in single governance mode, run all governance types (including debug mode)
 const runAllGovernanceTypes = !singleGovernanceMode;
 
-if (runAllGovernanceTypes) {
-  runAllGovernanceTests();
-} else {
-  runSingleGovernanceTests();
-}
+(async () => {
+  if (runAllGovernanceTypes) {
+    await runAllGovernanceTests();
+  } else {
+    await runSingleGovernanceTests();
+  }
+})();
 
 async function runAllGovernanceTests() {
+  // Initialize release URL if running in release mode
+  if (process.env.TEST_ENV === 'release') {
+    console.log('Initializing release environment...');
+    try {
+      await initializeReleaseUrl();
+      // Store the release URL in an environment variable for child processes
+      const releaseUrl = await getEnvironmentUrl('release');
+      process.env.RELEASE_URL = releaseUrl;
+      console.log(`[run-tests] Release URL stored for child processes: ${releaseUrl}`);
+    } catch (error) {
+      console.error('Failed to initialize release environment:', error);
+      process.exit(1);
+    }
+  }
+
+  // Display which base URL will be used
+  const { displayBaseUrlInfo } = require('../tests/test-helpers');
+  const { env, baseUrl, source } = displayBaseUrlInfo();
+
   const governanceTypes = ['erc20', 'erc721', 'multisig'];
   const wallClockStart = Date.now();
   
@@ -180,13 +252,33 @@ async function runAllGovernanceTests() {
     totalSkipped,
     totalDuration,
     resultsDir,
-    allSummaries
+    allSummaries,
+    baseUrl
   );
   
   process.exit(allPassed ? 0 : 1);
 }
 
 async function runSingleGovernanceTests() {
+  // Initialize release URL if running in release mode
+  if (process.env.TEST_ENV === 'release') {
+    console.log('Initializing release environment...');
+    try {
+      await initializeReleaseUrl();
+      // Store the release URL in an environment variable for child processes
+      const releaseUrl = await getEnvironmentUrl('release');
+      process.env.RELEASE_URL = releaseUrl;
+      console.log(`[run-tests] Release URL stored for child processes: ${releaseUrl}`);
+    } catch (error) {
+      console.error('Failed to initialize release environment:', error);
+      process.exit(1);
+    }
+  }
+
+  // Display which base URL will be used
+  const { displayBaseUrlInfo } = require('../tests/test-helpers');
+  const { env, baseUrl, source } = displayBaseUrlInfo();
+
   // Use custom screenshots dir if provided (for multi-governance runs)
   const screenshotsDir = process.env.SCREENSHOTS_DIR || path.join(resultsDir, 'screenshots');
 
@@ -293,7 +385,16 @@ async function runSingleGovernanceTests() {
 
   let filteredTests: string[];
   if (testFileArgs.length > 0) {
-    filteredTests = testFileArgs.map(f => path.isAbsolute(f) ? f : path.join(process.cwd(), f));
+    filteredTests = testFileArgs.map(f => {
+      if (path.isAbsolute(f)) {
+        return f;
+      }
+      // If it doesn't start with 'tests/', prepend it
+      if (!f.startsWith('tests/') && !f.startsWith('tests\\')) {
+        f = path.join('tests', f);
+      }
+      return path.join(process.cwd(), f);
+    });
   } else {
     filteredTests = regressionTypeFilter
       ? tests.filter(f => testHasRegressionType(f, regressionTypeFilter))
@@ -443,6 +544,7 @@ async function runSingleGovernanceTests() {
     timestamp,
     totalRunTimeStr,
     wallClockDuration,
+    baseUrl,
     openSummary: !process.env.SCREENSHOTS_DIR, // Only open if not called from multi-governance run
     skipMarkdown: !!process.env.SKIP_MARKDOWN // Skip markdown when SKIP_MARKDOWN env var is set
   });

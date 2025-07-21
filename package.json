@@ -5,19 +5,14 @@
   "main": "index.js",
   "scripts": {
     "test": "ts-node src/run-tests.ts",
-    "test:single": "ts-node",
-    "test:url": "cross-env npm test",
+    "test:single": "ts-node src/run-tests.ts",
     "build": "tsc",
-    "test:develop": "cross-env TEST_ENV=develop npm test",
-    "test:production": "cross-env TEST_ENV=production npm test",
-    "test:release": "cross-env TEST_ENV=release npm test",
-    "test:debug": "ts-node src/run-tests.ts --debug",
-    "test:erc20": "cross-env GOVERNANCE_TYPE=erc20 ts-node",
-    "test:erc20:debug": "cross-env GOVERNANCE_TYPE=erc20 DEBUG=true ts-node",
-    "test:erc721": "cross-env GOVERNANCE_TYPE=erc721 ts-node",
-    "test:erc721:debug": "cross-env GOVERNANCE_TYPE=erc721 DEBUG=true ts-node",
-    "test:multisig": "cross-env GOVERNANCE_TYPE=multisig ts-node",
-    "test:multisig:debug": "cross-env GOVERNANCE_TYPE=multisig DEBUG=true ts-node"
+    "test:erc20": "ts-node src/run-tests.ts --governance=erc20",
+    "test:erc721": "ts-node src/run-tests.ts --governance=erc721", 
+    "test:multisig": "ts-node src/run-tests.ts --governance=multisig",
+    "test:production": "ts-node src/run-tests.ts --env=production",
+    "test:release": "ts-node src/run-tests.ts --env=release",
+    "test:debug": "ts-node src/run-tests.ts --debug"
   },
   "dependencies": {
     "selenium-webdriver": "^4.0.0"
