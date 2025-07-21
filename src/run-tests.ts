@@ -67,12 +67,8 @@ const tsNodeBin = path.join(process.cwd(), 'node_modules', '.bin', process.platf
 // Declare resultsDir at the top for use throughout the file
 const resultsDir = path.join(process.cwd(), 'test-results');
 
-// Use clean environment for local development only (not remote and not in child processes)
+// Detect if this is a child process to suppress redundant console output
 const isChildProcess = argv.some(arg => arg.startsWith('--governance='));
-
-if (!isChildProcess) {
-  console.log('[run-tests] Using environment as-is');
-}
 
 // Check if this should run all governance types (default behavior)
 const debugMode = argv.some(arg => arg === '--debug' || arg === 'debug');
@@ -87,20 +83,41 @@ const testEnv = envArg ? envArg.split('=')[1] : 'develop';
 const baseUrlArg = argv.find(arg => arg.startsWith('--base-url=') || arg.startsWith('--base_url='));
 if (baseUrlArg) {
   process.env.BASE_URL = baseUrlArg.split('=')[1];
-  console.log(`[run-tests] Custom base URL set: ${process.env.BASE_URL}`);
+  if (!isChildProcess) {
+    console.log(`[run-tests] Custom base URL set: ${process.env.BASE_URL}`);
+  }
 }
 
 // Handle --flags= argument
 const flagsArg = argv.find(arg => arg.startsWith('--flags='));
 if (flagsArg) {
   process.env.TEST_FLAGS = flagsArg.split('=')[1];
-  console.log(`[run-tests] Feature flags set: ${process.env.TEST_FLAGS}`);
+  if (!isChildProcess) {
+    console.log(`[run-tests] Feature flags set: ${process.env.TEST_FLAGS}`);
+  }
 }
 
 // Set TEST_ENV for backward compatibility with existing code
 process.env.TEST_ENV = testEnv;
 if (testEnv !== 'develop') {
   console.log(`[run-tests] Environment set to: ${testEnv}`);
+}
+
+// Display base URL info once at startup
+let baseUrlDisplayed = false;
+function displayBaseUrlOnce() {
+  if (!baseUrlDisplayed && !isChildProcess) {
+    const { displayBaseUrlInfo } = require('../tests/test-helpers');
+    const { env, baseUrl, source } = displayBaseUrlInfo();
+    baseUrlDisplayed = true;
+    return { env, baseUrl, source };
+  }
+  // For subsequent calls or child processes, just return the info without console output
+  const { getEnv, getBaseUrl } = require('../tests/test-helpers');
+  const env = getEnv();
+  const baseUrl = getBaseUrl();
+  const source = process.env.BASE_URL ? 'BASE_URL override' : `${env} environment`;
+  return { env, baseUrl, source };
 }
 
 // If a specific test file is provided, determine governance type from path and use single governance mode
@@ -145,8 +162,7 @@ async function runAllGovernanceTests() {
   }
 
   // Display which base URL will be used
-  const { displayBaseUrlInfo } = require('../tests/test-helpers');
-  const { env, baseUrl, source } = displayBaseUrlInfo();
+  const { env, baseUrl, source } = displayBaseUrlOnce();
 
   const governanceTypes = ['erc20', 'erc721', 'multisig'];
   const wallClockStart = Date.now();
@@ -290,8 +306,7 @@ async function runSingleGovernanceTests() {
   }
 
   // Display which base URL will be used
-  const { displayBaseUrlInfo } = require('../tests/test-helpers');
-  const { env, baseUrl, source } = displayBaseUrlInfo();
+  const { env, baseUrl, source } = displayBaseUrlOnce();
 
   // Use custom screenshots dir if provided (for multi-governance runs)
   const screenshotsDir = process.env.SCREENSHOTS_DIR || path.join(resultsDir, 'screenshots');
