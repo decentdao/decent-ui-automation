@@ -83,6 +83,20 @@ const testFileArgs = argv.filter(arg => arg.endsWith('.test.ts'));
 const envArg = argv.find(arg => arg.startsWith('--env='));
 const testEnv = envArg ? envArg.split('=')[1] : 'develop';
 
+// Handle --base-url= argument (npm converts hyphens to underscores)
+const baseUrlArg = argv.find(arg => arg.startsWith('--base-url=') || arg.startsWith('--base_url='));
+if (baseUrlArg) {
+  process.env.BASE_URL = baseUrlArg.split('=')[1];
+  console.log(`[run-tests] Custom base URL set: ${process.env.BASE_URL}`);
+}
+
+// Handle --flags= argument
+const flagsArg = argv.find(arg => arg.startsWith('--flags='));
+if (flagsArg) {
+  process.env.TEST_FLAGS = flagsArg.split('=')[1];
+  console.log(`[run-tests] Feature flags set: ${process.env.TEST_FLAGS}`);
+}
+
 // Set TEST_ENV for backward compatibility with existing code
 process.env.TEST_ENV = testEnv;
 if (testEnv !== 'develop') {
