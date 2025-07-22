@@ -174,6 +174,7 @@ async function runAllGovernanceTests() {
   let totalDuration = 0;
   let totalPassed = 0;
   let totalFailed = 0;
+  let totalCrashed = 0;
   let totalSkipped = 0;
   let totalCount = 0;
   
@@ -220,7 +221,7 @@ async function runAllGovernanceTests() {
           let match;
           while ((match = tableRowRegex.exec(html)) !== null) {
             const testName = match[1].replace(/<span.*?<\/span>/g, '').trim(); // Remove error link spans
-            const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️ Skipped' : '❌';
+            const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️ Skipped' : match[2] === 'NO RUN' ? '⚪ NO RUN' : '❌';
             const runTime = match[3];
             const screenshot = 'Available'; // We know screenshots exist since HTML is generated
             
@@ -261,6 +262,9 @@ async function runAllGovernanceTests() {
         const failMatch = html.match(/title='Failed: (\d+)'/);
         if (failMatch) totalFailed += parseInt(failMatch[1]);
         
+        const crashMatch = html.match(/title='No Run: (\d+)'/);
+        if (crashMatch) totalCrashed += parseInt(crashMatch[1]);
+        
         const skipMatch = html.match(/title='Skipped: (\d+)'/);
         if (skipMatch) totalSkipped += parseInt(skipMatch[1]);
         
@@ -279,6 +283,7 @@ async function runAllGovernanceTests() {
     totalPassed,
     totalCount,
     totalFailed,
+    totalCrashed,
     totalSkipped,
     totalDuration,
     resultsDir,
@@ -365,6 +370,32 @@ async function runSingleGovernanceTests() {
     return undefined;
   }
 
+  function detectCrash(output: string, error: string): boolean {
+    const crashPatterns = [
+      /Fatal error/i,
+      /unreachable code/i,
+      /Segmentation fault/i,
+      /out of memory/i,
+      /SIGKILL/i,
+      /SIGTERM/i
+    ];
+    
+    const combinedOutput = (output + '\n' + error).toLowerCase();
+    
+    // Check for known crash patterns
+    if (crashPatterns.some(pattern => pattern.test(combinedOutput))) {
+      return true;
+    }
+    
+    // Check for process death with minimal output (likely infrastructure failure)
+    const meaningfulOutput = output.trim() + error.trim();
+    if (meaningfulOutput.length < 100 && !meaningfulOutput.includes('PASS') && !meaningfulOutput.includes('FAIL') && !meaningfulOutput.includes('test')) {
+      return true;
+    }
+    
+    return false;
+  }
+
   function testHasRegressionType(testFile: string, type: string): boolean {
     try {
       const content = fs.readFileSync(testFile, 'utf8');
@@ -395,6 +426,7 @@ async function runSingleGovernanceTests() {
   const colors = {
     green: '\x1b[32m',
     red: '\x1b[31m',
+    gray: '\x1b[90m',
     reset: '\x1b[0m',
   };
 
@@ -494,6 +526,7 @@ async function runSingleGovernanceTests() {
         let testName = path.relative(path.join(__dirname, '..', 'tests'), testFile).replace(/\\/g, '/');
         testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
         const passed = code === 0;
+        const crashed = !passed && detectCrash(output, error);
         let durationMs = Date.now() - start;
         
         // Check if a screenshot was actually saved
@@ -511,6 +544,9 @@ async function runSingleGovernanceTests() {
         
         if (passed) {
           console.log(`${testName}: ${colors.green}pass${colors.reset}`);
+        } else if (crashed) {
+          allPassed = false;
+          console.log(`${testName}: ${colors.gray}NO RUN${colors.reset}`);
         } else {
           allPassed = false;
           console.log(`${testName}: ${colors.red}fail${colors.reset}`);
@@ -532,10 +568,10 @@ async function runSingleGovernanceTests() {
             errorMsg += (errorMsg ? '\n' : '') + tempError;
           }
           
-          if (!errorMsg) errorMsg = 'Test failed (no error output)';
-          testResults.push({ name: testName, passed, errorMsg, screenshotPath, durationMs });
+          if (!errorMsg) errorMsg = crashed ? 'Test process crashed (no test execution)' : 'Test failed (no error output)';
+          testResults.push({ name: testName, passed, crashed, errorMsg, screenshotPath, durationMs });
         } else {
-          testResults.push({ name: testName, passed, screenshotPath, durationMs });
+          testResults.push({ name: testName, passed, crashed: false, screenshotPath, durationMs });
         }
         
         running--;

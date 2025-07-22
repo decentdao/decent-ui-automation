@@ -4,6 +4,7 @@ import * as path from 'path';
 export interface TestResult {
   name: string;
   passed: boolean;
+  crashed?: boolean;
   errorMsg?: string;
   screenshotPath?: string;
   durationMs?: number;
@@ -29,7 +30,8 @@ export function generateTestSummary(testResults: TestResult[], options: SummaryO
 
   const passedCount = testResults.filter(r => r.passed).length;
   const totalCount = testResults.length;
-  const failedCount = testResults.filter(r => !r.passed && r.errorMsg !== 'Skipped due to header-loads failure.').length;
+  const failedCount = testResults.filter(r => !r.passed && !r.crashed && r.errorMsg !== 'Skipped due to header-loads failure.').length;
+  const crashedCount = testResults.filter(r => r.crashed).length;
   const skippedCount = testResults.filter(r => r.errorMsg === 'Skipped due to header-loads failure.').length;
 
   // Generate Markdown summary (skip if part of multi-governance run)
@@ -49,6 +51,7 @@ export function generateTestSummary(testResults: TestResult[], options: SummaryO
     passedCount,
     totalCount,
     failedCount,
+    crashedCount,
     skippedCount,
     timestamp,
     totalRunTimeStr,
@@ -89,7 +92,16 @@ function generateMarkdownSummary(testResults: TestResult[], options: {
 
   let errorId = 0;
   for (const r of testResults) {
-    let resultEmoji = r.passed ? '✅' : r.errorMsg === 'Skipped due to header-loads failure.' ? '⚠️ Skipped' : '❌';
+    let resultEmoji;
+    if (r.passed) {
+      resultEmoji = '✅';
+    } else if (r.crashed) {
+      resultEmoji = '⚪ NO RUN';
+    } else if (r.errorMsg === 'Skipped due to header-loads failure.') {
+      resultEmoji = '⚠️ Skipped';
+    } else {
+      resultEmoji = '❌';
+    }
     let runTime = '';
     if (typeof r.durationMs === 'number') {
       const seconds = r.durationMs / 1000;
@@ -133,15 +145,16 @@ function generateHtmlSummary(testResults: TestResult[], options: {
   passedCount: number;
   totalCount: number;
   failedCount: number;
+  crashedCount: number;
   skippedCount: number;
   timestamp: string;
   totalRunTimeStr: string;
   governanceType?: string;
   baseUrl?: string;
 }): void {
-  const { resultsDir, passedCount, totalCount, failedCount, skippedCount, timestamp, totalRunTimeStr, governanceType, baseUrl } = options;
+  const { resultsDir, passedCount, totalCount, failedCount, crashedCount, skippedCount, timestamp, totalRunTimeStr, governanceType, baseUrl } = options;
 
-  let html = `<!DOCTYPE html>\n<html lang='en'>\n<head>\n<meta charset='UTF-8'>\n<title>Test Results Summary</title>\n<style>\nbody { font-family: Arial, sans-serif; background: #fafbfc; color: #222; }\ntable { border-collapse: collapse; width: 100%; margin-top: 1em; }\nth, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }\nth { background: #f3f3f3; }\n.pass { color: #228B22; font-weight: bold; }\n.fail { color: #B22222; font-weight: bold; }\n.skipped { color: #b59a00; font-weight: bold; }\ntr:nth-child(even) { background: #f9f9f9; }\ntr.data-row:hover { background: #e0eaff !important; }\n.bar-container { width: 100%; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; margin: 18px 0 10px 0; border: 1px solid #ccc; display: flex; }\n.bar-pass { background: #228B22; height: 100%; }\n.bar-fail { background: #B22222; height: 100%; }\n.bar-skipped { background: #b59a00; height: 100%; }\n.error-link { color: #0074d9; cursor: pointer; text-decoration: underline; font-size: 0.95em; margin-left: 8px; }\n.error-details { display: none; color: #B22222; font-size: 0.95em; background: #fff8f8; border: 1px solid #f3cccc; border-radius: 4px; margin-top: 4px; padding: 8px; white-space: pre-wrap; }\n</style>\n<script>\n`;
+  let html = `<!DOCTYPE html>\n<html lang='en'>\n<head>\n<meta charset='UTF-8'>\n<title>Test Results Summary</title>\n<style>\nbody { font-family: Arial, sans-serif; background: #fafbfc; color: #222; }\ntable { border-collapse: collapse; width: 100%; margin-top: 1em; }\nth, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }\nth { background: #f3f3f3; }\n.pass { color: #228B22; font-weight: bold; }\n.fail { color: #B22222; font-weight: bold; }\n.crash { color: #666; font-weight: bold; }\n.skipped { color: #b59a00; font-weight: bold; }\ntr:nth-child(even) { background: #f9f9f9; }\ntr.data-row:hover { background: #e0eaff !important; }\n.bar-container { width: 100%; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; margin: 18px 0 10px 0; border: 1px solid #ccc; display: flex; }\n.bar-pass { background: #228B22; height: 100%; }\n.bar-fail { background: #B22222; height: 100%; }\n.bar-crash { background: #666; height: 100%; }\n.bar-skipped { background: #b59a00; height: 100%; }\n.error-link { color: #0074d9; cursor: pointer; text-decoration: underline; font-size: 0.95em; margin-left: 8px; }\n.error-details { display: none; color: #B22222; font-size: 0.95em; background: #fff8f8; border: 1px solid #f3cccc; border-radius: 4px; margin-top: 4px; padding: 8px; white-space: pre-wrap; }\n</style>\n<script>\n`;
 
   if (governanceType) {
     html += `function toggleError(gov, id) {\n  var details = document.getElementById(gov + '-error-details-' + id);\n  var link = document.getElementById(gov + '-error-link-' + id);\n  if (details.style.display === 'block') {\n    details.style.display = 'none';\n    link.textContent = '(show error)';\n  } else {\n    details.style.display = 'block';\n    link.textContent = '(hide error)';\n  }\n}\n`;
@@ -149,12 +162,24 @@ function generateHtmlSummary(testResults: TestResult[], options: {
     html += `function toggleError(id) {\n  var details = document.getElementById('error-details-' + id);\n  var link = document.getElementById('error-link-' + id);\n  if (details.style.display === 'block') {\n    details.style.display = 'none';\n    link.textContent = '(show error)';\n  } else {\n    details.style.display = 'block';\n    link.textContent = '(hide error)';\n  }\n}\n`;
   }
 
-  html += `</script>\n</head>\n<body>\n<h2>Test Results Summary</h2>\n<p><b>Timestamp:</b> ${timestamp}</p>\n${baseUrl ? `<p><b>Base URL:</b> ${baseUrl}</p>\n` : ''}<p><b>Total run time:</b> ${totalRunTimeStr}</p>\n<p><b>${passedCount}/${totalCount} tests passed</b></p>\n<div class='bar-container'>\n  <div class='bar-pass' style='width:${passedCount/totalCount*100}%' title='Passed: ${passedCount}'></div>\n  <div class='bar-fail' style='width:${failedCount/totalCount*100}%' title='Failed: ${failedCount}'></div>\n  <div class='bar-skipped' style='width:${skippedCount/totalCount*100}%' title='Skipped: ${skippedCount}'></div>\n</div>\n<table>\n<thead><tr><th>Test Name</th><th>Result</th><th>Run Time</th><th>Screenshot</th></tr></thead>\n<tbody>\n`;
+  html += `</script>\n</head>\n<body>\n<h2>Test Results Summary</h2>\n<p><b>Timestamp:</b> ${timestamp}</p>\n${baseUrl ? `<p><b>Base URL:</b> ${baseUrl}</p>\n` : ''}<p><b>Total run time:</b> ${totalRunTimeStr}</p>\n<p><b>${passedCount}/${totalCount} tests passed</b></p>\n<div class='bar-container'>\n  <div class='bar-pass' style='width:${passedCount/totalCount*100}%' title='Passed: ${passedCount}'></div>\n  <div class='bar-fail' style='width:${failedCount/totalCount*100}%' title='Failed: ${failedCount}'></div>\n  <div class='bar-crash' style='width:${crashedCount/totalCount*100}%' title='No Run: ${crashedCount}'></div>\n  <div class='bar-skipped' style='width:${skippedCount/totalCount*100}%' title='Skipped: ${skippedCount}'></div>\n</div>\n<table>\n<thead><tr><th>Test Name</th><th>Result</th><th>Run Time</th><th>Screenshot</th></tr></thead>\n<tbody>\n`;
 
   let errorId = 0;
   for (const r of testResults) {
-    let resultClass = r.passed ? 'pass' : r.errorMsg === 'Skipped due to header-loads failure.' ? 'skipped' : 'fail';
-    let resultText = r.passed ? 'PASS' : r.errorMsg === 'Skipped due to header-loads failure.' ? 'SKIPPED' : 'FAIL';
+    let resultClass, resultText;
+    if (r.passed) {
+      resultClass = 'pass';
+      resultText = 'PASS';
+    } else if (r.crashed) {
+      resultClass = 'crash';
+      resultText = 'NO RUN';
+    } else if (r.errorMsg === 'Skipped due to header-loads failure.') {
+      resultClass = 'skipped';
+      resultText = 'SKIPPED';
+    } else {
+      resultClass = 'fail';
+      resultText = 'FAIL';
+    }
     let runTime = '';
     if (typeof r.durationMs === 'number') {
       const seconds = r.durationMs / 1000;
@@ -203,6 +228,7 @@ export async function generateCombinedSummary(
   totalPassed: number,
   totalCount: number,
   totalFailed: number,
+  totalCrashed: number,
   totalSkipped: number,
   totalDuration: number,
   resultsDir: string,
@@ -218,6 +244,7 @@ export async function generateCombinedSummary(
   // Generate combined HTML
   const percentPassed = totalCount ? (totalPassed / totalCount) * 100 : 0;
   const percentFailed = totalCount ? (totalFailed / totalCount) * 100 : 0;
+  const percentCrashed = totalCount ? (totalCrashed / totalCount) * 100 : 0;
   const percentSkipped = totalCount ? (totalSkipped / totalCount) * 100 : 0;
   
   let totalRunTimeStr = '';
@@ -235,6 +262,7 @@ export async function generateCombinedSummary(
   <div class='bar-container'>
     <div class='bar-pass' style='width:${percentPassed}%' title='Passed: ${totalPassed}'></div>
     <div class='bar-fail' style='width:${percentFailed}%' title='Failed: ${totalFailed}'></div>
+    <div class='bar-crash' style='width:${percentCrashed}%' title='No Run: ${totalCrashed}'></div>
     <div class='bar-skipped' style='width:${percentSkipped}%' title='Skipped: ${totalSkipped}'></div>
   </div>
   `;
@@ -248,6 +276,7 @@ export async function generateCombinedSummary(
   .bar-container { width: 100%; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; margin: 18px 0 10px 0; border: 1px solid #ccc; display: flex; }
   .bar-pass { background: #228B22; height: 100%; }
   .bar-fail { background: #B22222; height: 100%; }
+  .bar-crash { background: #666; height: 100%; }
   .bar-skipped { background: #b59a00; height: 100%; }
   </style>
   <script>
@@ -269,7 +298,8 @@ export async function generateCombinedSummary(
 
   // Generate combined Markdown
   const govHeaders = governanceTypes.map(g => g.toUpperCase());
-  let combinedMd = `# 🧪 UI Automation Test Results\n\n> 📸 Download all screenshots from the workflow artifacts above.\n\nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
+  let combinedMd = `# 🧪 UI Automation Test Results\n\n**Start Timestamp:** ${firstTimestamp}  \n`;
+  combinedMd += `> 📸 Download all screenshots from the workflow artifacts above.\n\nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
   
   // Add summary stats
   const wallClockEnd = Date.now();
