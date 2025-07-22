@@ -494,8 +494,10 @@ async function runSingleGovernanceTests() {
         let testName = path.relative(path.join(__dirname, '..', 'tests'), testFile).replace(/\\/g, '/');
         testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
         const passed = code === 0;
-        let screenshotPath = findScreenshotPath(testName);
         let durationMs = Date.now() - start;
+        
+        // Check if a screenshot was actually saved
+        const screenshotPath = findScreenshotPath(testName);
         
         // In debug mode, print all buffered output for this test, then the result line
         if (debugMode) {
