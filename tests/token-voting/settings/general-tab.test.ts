@@ -10,7 +10,7 @@ import { pages } from '../../../config/pages';
 const governanceArg = process.argv.find(arg => arg.startsWith('--governance='));
 const governanceType = governanceArg ? governanceArg.split('=')[1].toLowerCase() : 'erc20';
 
-const test = new BaseSeleniumTest('settings', 'content-loads');
+const test = new BaseSeleniumTest('settings', 'general-tab');
 BaseSeleniumTest.run(async (test) => {
   // Step 1: Load the DAO homepage
   await test.start();
@@ -19,7 +19,7 @@ BaseSeleniumTest.run(async (test) => {
   // Step 2: Click the 'Manage DAO' button
   const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   await manageBtn.click();
-  // Step 3: Wait for the 'General' text in the modal
-  await test.waitForElement(By.xpath("//p[text()='General']"));
-  console.log('Settings modal opened and "General" text found.');
+  // Step 3: Wait for the DAO settings name element
+  await test.waitForElement(By.css('[data-testid="daoSettings.name"]'));
+  console.log('Settings modal opened, General tab active, and DAO settings name element found.');
 }, test);

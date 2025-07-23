@@ -1,0 +1,24 @@
+import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
+import { getTestDao } from '../../../config/test-daos';
+import { BaseSeleniumTest } from '../../base-selenium-test';
+import { By } from 'selenium-webdriver';
+import { pages } from '../../../config/pages';
+
+const test = new BaseSeleniumTest('settings', 'modules-tab');
+BaseSeleniumTest.run(async (test) => {
+  // Step 1: Load the DAO homepage
+  await test.start();
+  const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
+  // Step 2: Click the 'Manage DAO' button
+  const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
+  await manageBtn.click();
+  // Step 3: Wait for the 'General' text in the modal
+  await test.waitForElement(By.xpath("//p[text()='General']"));
+  // Step 4: Click on the 'Modules and Guards' tab
+  const modulesTab = await test.waitForElement(By.xpath("//p[text()='Modules and Guards']"));
+  await modulesTab.click();
+  // Step 5: Wait for the 'Modules' paragraph (exact text match)
+  await test.waitForElement(By.xpath("//p[text()='Modules']"));
+  console.log('Modules and Guards tab opened and "Modules" paragraph found.');
+}, test);

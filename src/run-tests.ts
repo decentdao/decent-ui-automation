@@ -336,7 +336,7 @@ async function runSingleGovernanceTests() {
 
   function findTestFiles(dir: string): string[] {
     let results: string[] = [];
-    const list = fs.readdirSync(dir);
+    const list = fs.readdirSync(dir).sort(); // Sort directory contents alphabetically
     list.forEach((file) => {
       const filePath = path.join(dir, file);
       const stat = fs.statSync(filePath);
@@ -346,7 +346,22 @@ async function runSingleGovernanceTests() {
         results.push(filePath);
       }
     });
-    return results;
+    
+    // Custom sort: group by directory first, then by filename within each directory
+    return results.sort((a, b) => {
+      const dirA = path.dirname(a);
+      const dirB = path.dirname(b);
+      const fileA = path.basename(a);
+      const fileB = path.basename(b);
+      
+      // First compare directories
+      if (dirA !== dirB) {
+        return dirA.localeCompare(dirB);
+      }
+      
+      // If same directory, compare filenames
+      return fileA.localeCompare(fileB);
+    });
   }
 
   function findScreenshotPath(testName: string): string | undefined {
@@ -604,6 +619,22 @@ async function runSingleGovernanceTests() {
   } else {
     totalRunTimeStr = wallClockSeconds.toFixed(2) + 's';
   }
+
+  // Sort test results by directory first, then by filename within each directory
+  testResults.sort((a, b) => {
+    const dirA = path.dirname(a.name);
+    const dirB = path.dirname(b.name);
+    const fileA = path.basename(a.name);
+    const fileB = path.basename(b.name);
+    
+    // First compare directories
+    if (dirA !== dirB) {
+      return dirA.localeCompare(dirB);
+    }
+    
+    // If same directory, compare filenames
+    return fileA.localeCompare(fileB);
+  });
 
   generateTestSummary(testResults, {
     resultsDir,
