@@ -183,6 +183,81 @@ async function runAllGovernanceTests() {
   const allTestNames = new Set<string>();
   const allSummaries: string[] = [];
   
+  // Run general tests once (not governance-specific)
+  console.log(`\n===== Running general tests =====`);
+  const generalScreenshotsDir = path.join(resultsDir, 'screenshots', 'general');
+  if (!fs.existsSync(generalScreenshotsDir)) fs.mkdirSync(generalScreenshotsDir, { recursive: true });
+  
+  // Clear existing general screenshots
+  for (const file of fs.readdirSync(generalScreenshotsDir)) {
+    if (file.endsWith('.png')) fs.unlinkSync(path.join(generalScreenshotsDir, file));
+  }
+  
+  resultsByGov['general'] = {};
+  await new Promise((resolve) => {
+    const args = ['src/run-tests.ts', '--governance=general'];
+    if (debugMode) args.push('--debug');
+    
+    const proc = spawn('npx', ['ts-node', ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true,
+      env: { 
+        ...process.env, 
+        SCREENSHOTS_DIR: generalScreenshotsDir,
+        SKIP_MARKDOWN: 'true' // Skip markdown for individual runs
+      },
+    });
+    
+    let output = '';
+    let errorOutput = '';
+    proc.stdout?.on('data', (data) => {
+      const chunk = data.toString();
+      output += chunk;
+      if (debugMode) process.stdout.write(chunk);
+    });
+    proc.stderr?.on('data', (data) => {
+      const chunk = data.toString();
+      errorOutput += chunk;
+      if (debugMode) process.stderr.write(chunk);
+    });
+    
+    proc.on('close', (code) => {
+      // Parse results for general tests (similar to governance-specific parsing)
+      const htmlPath = path.join(resultsDir, 'test-results-summary.html');
+      if (fs.existsSync(htmlPath)) {
+        const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+        
+        // Parse test results from HTML using the same regex as governance tests
+        const tableRowRegex = /<tr class='data-row'><td>(.*?)<\/td><td class='[^']*'>([^<]+)<\/td><td>([^<]*)<\/td><td>.*?<\/td><\/tr>/g;
+        let match;
+        while ((match = tableRowRegex.exec(htmlContent)) !== null) {
+          const testName = match[1].replace(/<span.*?<\/span>/g, '').trim(); // Remove error link spans
+          const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️ Skipped' : match[2] === 'NO RUN' ? '⚪ NO RUN' : '❌';
+          const runTime = match[3];
+          const screenshot = 'Available'; // We know screenshots exist since HTML is generated
+          
+          allTestNames.add(testName);
+          resultsByGov['general'][testName] = {
+            result,
+            runTime,
+            screenshot
+          };
+        }
+        
+        // Store HTML for combined summary (keep existing HTML generation logic)
+        let html = htmlContent;
+        // Update screenshot paths for general tests
+        const generalScreenshotRegex = new RegExp(`href='screenshots/(?!general/)`, 'g');
+        html = html.replace(generalScreenshotRegex, `href='screenshots/general/`);
+        
+        allSummaries.push(`<h2>Results for governance: general</h2>\n` + html);
+      }
+      
+      if (code !== 0) allPassed = false;
+      resolve(undefined);
+    });
+  });
+  
   for (const governanceType of governanceTypes) {
     resultsByGov[governanceType] = {};
     console.log(`\n===== Running tests for governance: ${governanceType} =====`);
@@ -366,7 +441,7 @@ async function runSingleGovernanceTests() {
 
   function findScreenshotPath(testName: string): string | undefined {
     // Remove any leading governance type from testName to avoid double folders
-    let cleanName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
+    let cleanName = testName.replace(/^(token-voting|multisig|erc20|erc721|general)\//, '');
     const screenshotRelPath = cleanName.replace(/\\/g, '/').replace(/\.test\.ts$/, '.png');
     const screenshotPath = path.join(screenshotsDir, screenshotRelPath);
     if (fs.existsSync(screenshotPath)) return screenshotPath;
@@ -427,12 +502,14 @@ async function runSingleGovernanceTests() {
   let governanceType = 'erc20';
   if (governanceArg) {
     const val = governanceArg.split('=')[1].toLowerCase();
-    if (["erc20", "erc721", "multisig"].includes(val)) governanceType = val;
+    if (["erc20", "erc721", "multisig", "general"].includes(val)) governanceType = val;
   }
 
   let testRoot = '';
   if (governanceType === 'multisig') {
     testRoot = path.join(process.cwd(), 'tests', 'multisig');
+  } else if (governanceType === 'general') {
+    testRoot = path.join(process.cwd(), 'tests', 'general');
   } else {
     testRoot = path.join(process.cwd(), 'tests', 'token-voting');
   }
@@ -539,7 +616,7 @@ async function runSingleGovernanceTests() {
       
       proc.on('close', (code) => {
         let testName = path.relative(path.join(__dirname, '..', 'tests'), testFile).replace(/\\/g, '/');
-        testName = testName.replace(/^(token-voting|multisig|erc20|erc721|multisig)\//, '');
+        testName = testName.replace(/^(token-voting|multisig|erc20|erc721|general)\//, '');
         const passed = code === 0;
         const crashed = !passed && detectCrash(output, error);
         let durationMs = Date.now() - start;
