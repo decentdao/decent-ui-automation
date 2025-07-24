@@ -44,9 +44,11 @@ npm test -- --debug --env=release --governance=erc20
 |----------|--------|-------------|
 | `--debug` | (flag) | Run only 5 tests per governance type |
 | `--governance=` | `erc20`, `erc721`, `multisig` | Run tests for specific governance type |
+| `--file=` | `tests/path/to/file.test.ts` | Run a single test file |
 | `--env=` | `production`, `release` | Environment (default: `develop`) |
 | `--base-url=` | Any URL | Override environment with custom URL |
 | `--flags=` | `feature_1=on,debug=on` | Pass feature flags as URL parameters |
+| `--no-headless` | (flag) | Disable headless mode; run test in chrome tab |
 
 ## Configuration
 
@@ -60,6 +62,7 @@ npm test -- --debug --env=release --governance=erc20
 
 ```
 tests/
+├── general/            # Cross-governance tests (app navigation, DAO creation)
 ├── multisig/           # Multi-signature governance tests
 └── token-voting/       # ERC20/ERC721 governance tests  
 

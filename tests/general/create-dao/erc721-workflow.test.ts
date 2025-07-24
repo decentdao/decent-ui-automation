@@ -34,23 +34,47 @@ BaseSeleniumTest.run(async (test) => {
   const tokenAddressInput = await test.waitForElement(By.css('[data-testid="erc721Token.nfts.0.tokenAddressInput"]'));
   await tokenAddressInput.sendKeys('0x31408f226E37FBF8715CA6eE45aaB4Ea213bA7A5');
   
-  // Wait for field validation to complete
-  await test.driver!.sleep(1000);
-  
   // Enter NFT token weight
   const tokenWeightInput = await test.waitForElement(By.css('[data-testid="erc721Token.nfts.0.tokenWeightInput"]'));
   await tokenWeightInput.sendKeys('1');
 
-  // Wait for field validation to complete
-  await test.driver!.sleep(1000);
+  // Click skip next button and wait for next page with retry logic
+  const maxRetries = 3;
+  let retryCount = 0;
+  let nextPageLoaded = false;
+  let quorumThresholdInput = null;
   
-  // Click skip next button again
-  const skipNextButton2 = await test.waitForElement(By.css('[data-testid="create-skipNextButton"]'));
-  await skipNextButton2.click();
+  while (!nextPageLoaded && retryCount < maxRetries) {
+    try {
+      console.log(`Attempting to navigate to next page (attempt ${retryCount + 1}/${maxRetries})`);
+      
+      // Click the skip next button
+      const skipNextButton2 = await test.waitForElement(By.css('[data-testid="create-skipNextButton"]'), 5000);
+      await skipNextButton2.click();
+      
+      // Wait for the next page to load by looking for the quorum threshold element
+      quorumThresholdInput = await test.waitForElement(By.css('[data-testid="govConfig-quorumThreshold"]'), 8000);
+      
+      // If we get here without an exception, the next page loaded
+      nextPageLoaded = true;
+      console.log(`Next page loaded successfully on attempt ${retryCount + 1}`);
+      
+    } catch (error) {
+      retryCount++;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(`Failed to load next page on attempt ${retryCount}, error: ${errorMessage}`);
+      
+      if (retryCount >= maxRetries) {
+        throw new Error(`Failed to load next page after ${maxRetries} attempts. Last error: ${errorMessage}`);
+      }
+      
+      // Wait a bit before retrying
+      await test.driver!.sleep(2000);
+    }
+  }
 
   // Enter quorum threshold
-  const quorumThresholdInput = await test.waitForElement(By.css('[data-testid="govConfig-quorumThreshold"]'));
-  await quorumThresholdInput.sendKeys('1');
+  await quorumThresholdInput!.sendKeys('1');
 
   // Click deploy DAO button
   const deployButton = await test.waitForElement(By.css('[data-testid="create-deployDAO"]'));

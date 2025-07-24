@@ -17,6 +17,14 @@ function getAllCliArgs(): string[] {
       const value = process.env[key];
       if (value === 'true') {
         args.push(`--${flagName}`);
+      } else if (value === '' && flagName !== 'file') {
+        // Handle flags like --no-headless which become npm_config_headless=''
+        // Special case: convert headless back to no-headless
+        if (flagName === 'headless') {
+          args.push('--no-headless');
+        } else {
+          args.push(`--${flagName}`);
+        }
       } else if (value && value !== 'false') {
         args.push(`--${flagName}=${value}`);
       }
@@ -74,6 +82,9 @@ const isChildProcess = argv.some(arg => arg.startsWith('--governance='));
 const debugMode = argv.some(arg => arg === '--debug' || arg === 'debug');
 const governanceArg = argv.find(arg => arg.startsWith('--governance='));
 const testFileArgs = argv.filter(arg => arg.endsWith('.test.ts'));
+
+// Handle --file= argument for single test execution
+const fileArg = argv.find(arg => arg.startsWith('--file='));
 
 // Handle --env= argument
 const envArg = argv.find(arg => arg.startsWith('--env='));
@@ -135,15 +146,40 @@ if (!singleGovernanceMode && testFileArgs.length > 0) {
 }
 
 // If not in single governance mode, run all governance types (including debug mode)
-const runAllGovernanceTypes = !singleGovernanceMode;
+const runAllGovernanceTypes = !singleGovernanceMode && !fileArg;
 
 (async () => {
-  if (runAllGovernanceTypes) {
+  if (fileArg) {
+    await runSingleFile();
+  } else if (runAllGovernanceTypes) {
     await runAllGovernanceTests();
   } else {
     await runSingleGovernanceTests();
   }
 })();
+
+async function runSingleFile() {
+  const filePath = fileArg!.split('=')[1];
+  
+  // Display which base URL will be used
+  const { displayBaseUrlInfo } = require('../tests/test-helpers');
+  displayBaseUrlInfo();
+  
+  console.log(`\n===== Running single test file: ${filePath} =====`);
+  
+  // Filter out the --file= argument but keep all other arguments for the test
+  const testArgs = argv.filter(arg => !arg.startsWith('--file='));
+  
+  const { spawn } = require('child_process');
+  const proc = spawn('npx', ['ts-node', filePath, ...testArgs], {
+    stdio: 'inherit',
+    shell: true
+  });
+  
+  proc.on('close', (code: number | null) => {
+    process.exit(code || 0);
+  });
+}
 
 async function runAllGovernanceTests() {
   // Initialize release URL if running in release mode
