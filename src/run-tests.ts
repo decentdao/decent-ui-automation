@@ -251,6 +251,32 @@ async function runAllGovernanceTests() {
         html = html.replace(generalScreenshotRegex, `href='screenshots/general/`);
         
         allSummaries.push(`<h2>Results for governance: general</h2>\n` + html);
+        
+        // Parse totals for general tests (same logic as governance tests)
+        const timestampMatch = htmlContent.match(/<b>Timestamp:<\/b> ([^<]+)<\/p>/);
+        if (!firstTimestamp && timestampMatch) firstTimestamp = timestampMatch[1];
+        
+        const durationMatch = htmlContent.match(/<b>Total run time:<\/b> ([^<]+)<\/p>/);
+        if (durationMatch) {
+          const val = durationMatch[1];
+          if (val.includes('min')) totalDuration += parseFloat(val) * 60;
+          else if (val.includes('s')) totalDuration += parseFloat(val);
+        }
+        
+        const passMatch = htmlContent.match(/<b>(\d+)[/](\d+) tests passed<\/b>/);
+        if (passMatch) {
+          totalPassed += parseInt(passMatch[1]);
+          totalCount += parseInt(passMatch[2]);
+        }
+        
+        const failMatch = htmlContent.match(/title='Failed: (\d+)'/);
+        if (failMatch) totalFailed += parseInt(failMatch[1]);
+        
+        const crashMatch = htmlContent.match(/title='No Run: (\d+)'/);
+        if (crashMatch) totalCrashed += parseInt(crashMatch[1]);
+        
+        const skipMatch = htmlContent.match(/title='Skipped: (\d+)'/);
+        if (skipMatch) totalSkipped += parseInt(skipMatch[1]);
       }
       
       if (code !== 0) allPassed = false;
