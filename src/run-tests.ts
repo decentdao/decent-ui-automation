@@ -235,26 +235,13 @@ async function runAllGovernanceTests() {
     if (debugMode) args.push('--debug');
     
     const proc = spawn('npx', ['ts-node', ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: 'inherit',
       shell: true,
       env: { 
         ...process.env, 
         SCREENSHOTS_DIR: generalScreenshotsDir,
         SKIP_MARKDOWN: 'true' // Skip markdown for individual runs
       },
-    });
-    
-    let output = '';
-    let errorOutput = '';
-    proc.stdout?.on('data', (data) => {
-      const chunk = data.toString();
-      output += chunk;
-      if (debugMode) process.stdout.write(chunk);
-    });
-    proc.stderr?.on('data', (data) => {
-      const chunk = data.toString();
-      errorOutput += chunk;
-      if (debugMode) process.stderr.write(chunk);
     });
     
     proc.on('close', (code) => {

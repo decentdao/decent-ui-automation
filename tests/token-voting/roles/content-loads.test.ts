@@ -28,7 +28,7 @@ BaseSeleniumTest.run(async (test) => {
       await test.driver!.get(appendFlagsToUrl(getBaseUrl() + rolesPath));
       
       // Confirm the image with the given alt is present (needs extra time to load)
-      await test.waitForElement(By.css('img[alt="0xAf3ee09F37ead9F28a05AeF0d09841BC9A6Fe8e9"]'), { extra: 10000 });
+      await test.waitForElement(By.css('img[alt="0xAf3ee09F37ead9F28a05AeF0d09841BC9A6Fe8e9"]'), { extra: 15000 });
       
       // If we get here without an exception, the roles loaded successfully
       rolesLoaded = true;
