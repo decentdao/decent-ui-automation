@@ -67,7 +67,7 @@ tests/
 └── token-voting/       # ERC20/ERC721 governance tests  
 
 config/                 # Test configuration
-test-results/          # Generated reports and screenshots
+test-results/           # Generated reports and screenshots
 ```
 
 ## Development

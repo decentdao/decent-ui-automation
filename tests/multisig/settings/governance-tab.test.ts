@@ -17,7 +17,7 @@ BaseSeleniumTest.run(async (test) => {
  // Click on the 'Governance' tab using JavaScript to bypass click interception
  const governanceTab = await test.waitForElement(By.xpath("//p[text()='Governance']"));
  await test.driver!.executeScript("arguments[0].click();", governanceTab);
- // Wait for the chakra form label element to confirm tab loaded
-await test.waitForElement(By.css('input.chakra-numberinput__field[role="spinbutton"]'));
- console.log('Governance tab clicked and form label element found.');
+ // Wait for the signer input with value starting with "0x"
+await test.waitForElement(By.css('input[value^="0x"]'));
+ console.log('Governance tab clicked and signer address found.');
 }, test);
