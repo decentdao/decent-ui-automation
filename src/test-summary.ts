@@ -114,6 +114,7 @@ function generateMarkdownSummary(testResults: TestResult[], options: {
     
     // Remove screenshot link for PR comment, just show 'Available' if screenshot exists
     let screenshotCell = '';
+    screenshotCell = '';
     if (r.screenshotPath && fs.existsSync(r.screenshotPath)) {
       try {
         const stats = fs.statSync(r.screenshotPath);

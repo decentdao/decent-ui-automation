@@ -18,6 +18,6 @@ BaseSeleniumTest.run(async (test) => {
  const governanceTab = await test.waitForElement(By.xpath("//p[text()='Governance']"));
  await test.driver!.executeScript("arguments[0].click();", governanceTab);
  // Wait for the chakra form label element to confirm tab loaded
- await test.waitForElement(By.css('[class*="chakra-form__label"]'), { extra: 5000 });
+await test.waitForElement(By.css('input.chakra-numberinput__field[role="spinbutton"]'));
  console.log('Governance tab clicked and form label element found.');
 }, test);
