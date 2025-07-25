@@ -96,7 +96,7 @@ function generateMarkdownSummary(testResults: TestResult[], options: {
     if (r.passed) {
       resultEmoji = '✅';
     } else if (r.crashed) {
-      resultEmoji = '⚪ NO RUN';
+      resultEmoji = '⚪';
     } else if (r.errorMsg === 'Skipped due to header-loads failure.') {
       resultEmoji = '⚠️ Skipped';
     } else {

@@ -76,14 +76,17 @@ export class BaseSeleniumTest {
     }
   }
 
-  async saveScreenshot() {
+  async saveScreenshot(timeoutMs = 10000) {
     if (this.driver) {
       const screenshotPath = path.join(this.screenshotDir, `${this.getScreenshotName()}.png`);
       const screenshotDir = path.dirname(screenshotPath);
       if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true });
       try {
-        const data = await this.driver.takeScreenshot();
-        fs.writeFileSync(screenshotPath, data, 'base64');
+        const data = await Promise.race([
+          this.driver.takeScreenshot(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout')), timeoutMs))
+        ]);
+        fs.writeFileSync(screenshotPath, String(data), 'base64');
         this.screenshotPath = screenshotPath;
         await this.flushLogs();
       } catch (err) {
@@ -101,7 +104,15 @@ export class BaseSeleniumTest {
       } catch (err) {
         console.error('[BaseSeleniumTest] Error during saveScreenshot in finish:', err);
       }
-      await this.driver.quit();
+      // Add timeout to driver.quit()
+      try {
+        await Promise.race([
+          this.driver.quit(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Driver quit timeout')), 10000))
+        ]);
+      } catch (err) {
+        console.error('[BaseSeleniumTest] Error during driver.quit in finish:', err);
+      }
       // Do not call process.exit here; let the test runner handle process exit
     }
   }
