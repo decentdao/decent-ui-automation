@@ -4,6 +4,8 @@ import { By, WebElement } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
 
+// This test is annoyingly complicated: the sub DAO locator is hard to identify and the sub DAO name often shows as an address at first
+
 const test = new BaseSeleniumTest('organization', 'load-sub-dao');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
