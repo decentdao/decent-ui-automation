@@ -87,7 +87,17 @@ export class BaseSeleniumTest {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout')), timeoutMs))
         ]);
         fs.writeFileSync(screenshotPath, String(data), 'base64');
-        this.screenshotPath = screenshotPath;
+        // Only set screenshotPath if file exists and is non-empty
+        try {
+          const stats = fs.statSync(screenshotPath);
+          if (stats.size > 0) {
+            this.screenshotPath = screenshotPath;
+          } else {
+            this.screenshotPath = undefined;
+          }
+        } catch {
+          this.screenshotPath = undefined;
+        }
         await this.flushLogs();
       } catch (err) {
         // Only log errors
