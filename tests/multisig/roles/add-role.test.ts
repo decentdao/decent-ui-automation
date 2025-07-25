@@ -4,13 +4,12 @@ import { By } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
 
-const ROLES_PATH = `${pages['roles']}?dao=${getTestDao('multisig').value}&demo_mode=on`;
-
 const test = new BaseSeleniumTest('roles', 'add-role');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
   // Load the roles page
-  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + ROLES_PATH));
+  const rolesPath = `${pages['roles']}?dao=${getTestDao('multisig').value}&demo_mode=on`;
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + rolesPath));
   // Click the button with text "Edit Roles"
   const editRolesBtn = await test.waitForElement(By.xpath("//button[contains(., 'Edit Roles')]"));
   await editRolesBtn.click();

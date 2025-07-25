@@ -4,13 +4,12 @@ import { By, until } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
 
-const ORG_PATH = `${pages['organization']}?dao=${getTestDao('multisig').value}&demo_mode=on`;
-
 const test = new BaseSeleniumTest('organization', 'create-sub-dao');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
   // Load the organization page
-  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + ORG_PATH));
+  const orgPath = `${pages['organization']}?dao=${getTestDao('multisig').value}&demo_mode=on`;
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + orgPath));
   // Wait for the Create SubDAO button and click it
   const createBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create SubDAO')]"));
   await createBtn.click();

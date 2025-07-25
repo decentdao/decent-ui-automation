@@ -7,8 +7,6 @@ import { pages } from '../../../config/pages';
 
 // NOTE: This test has been modified to specifically work with multisig DAOs
 
-const DAO_HOME_PATH = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
-
 const test = new BaseSeleniumTest('proposal-overview', 'content-loads');
 BaseSeleniumTest.run(async (test) => {
   let proposalHash: string | null = null;
@@ -19,7 +17,8 @@ BaseSeleniumTest.run(async (test) => {
   while (attempt < maxRetries && !success) {
     try {
       await test.start();
-      await test.driver!.get(appendFlagsToUrl(getBaseUrl() + DAO_HOME_PATH));
+      const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
+      await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
 
       // Find the first proposal link (needs extra time to load)
       const proposalSelector = By.css('a[href^="/proposals/"]');

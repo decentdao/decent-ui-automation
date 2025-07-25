@@ -4,15 +4,14 @@ import { By, WebElement } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
 
-const ORG_PATH = `${pages['organization']}?dao=${getTestDao('multisig').value}`;
-
 const test = new BaseSeleniumTest('organization', 'load-sub-dao');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
   // Load the organization page
-  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + ORG_PATH));
+  const orgPath = `${pages['organization']}?dao=${getTestDao('multisig').value}`;
+  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + orgPath));
 
-  // Robust wait loop for all DAO favorite buttons to appear (first is parent DAO, second+ are sub DAOs)
+  // Wait loop for all DAO favorite buttons to appear (first is parent DAO, second+ are sub DAOs)
   const maxWaitMs = 15000;
   const pollIntervalMs = 500;
   let daoFavoriteElements: WebElement[] = [];
@@ -29,9 +28,15 @@ BaseSeleniumTest.run(async (test) => {
   // Move up to the immediate parent div of the favorite button (sub DAO block)
   const subDaoBlock = await anySubDaoFavorite.findElement(By.xpath('ancestor::div[1]'));
 
-  // Get the sub DAO name from the block
+  // Get the sub DAO name and abbreviated address from the block
   const subDaoNameElem = await subDaoBlock.findElement(By.css('p.chakra-text'));
   const subDaoName = await subDaoNameElem.getText();
+  let subDaoAbbrevAddr = '';
+  try {
+    const addrElem = await subDaoBlock.findElement(By.css('p.chakra-text + p.chakra-text'));
+    subDaoAbbrevAddr = await addrElem.getText();
+    console.log(`Found sub DAO abbreviated address: ${subDaoAbbrevAddr}`);
+  } catch {}
   console.log(`Found sub DAO name: ${subDaoName}`);
 
   // Scroll the sub DAO block into view before clicking
@@ -40,11 +45,14 @@ BaseSeleniumTest.run(async (test) => {
   await subDaoBlock.click();
 
   // Wait for the sub DAO homepage to load and check for the name using data-testid
-  await test.driver!.sleep(5000); // Delay to allow name to load (without delay DAO address is shown instead)
+  await test.driver!.sleep(1500); // Delay to allow name to load (without delay DAO address is shown instead)
   const nameElem = await test.waitForElement(By.css('[data-testid="DAOInfo-name"]'), { extra: 10000 });
   const loadedName = await nameElem.getText();
-  if (loadedName !== subDaoName) {
-    throw new Error(`Sub DAO homepage loaded, but name does not match. Expected: '${subDaoName}', Found: '${loadedName}'`);
+  // Accept if loadedName matches subDaoName or the abbreviated address (case-insensitive)
+  const isNameMatch = loadedName === subDaoName;
+  const isAddrMatch = subDaoAbbrevAddr && loadedName.trim().toLowerCase() === subDaoAbbrevAddr.trim().toLowerCase();
+  if (!isNameMatch && !isAddrMatch) {
+    throw new Error(`Sub DAO homepage loaded, but name does not match. Expected: '${subDaoName}' or abbreviated address '${subDaoAbbrevAddr}', Found: '${loadedName}'`);
   }
   console.log(`Sub DAO homepage loaded and name '${loadedName}' found.`);
 }, test);

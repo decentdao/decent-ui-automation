@@ -58,14 +58,14 @@ export function generateTestSummary(testResults: TestResult[], options: SummaryO
     governanceType
   });
 
-  // Open summary if requested and not running as part of multi-governance
+  // Open HTML summary if requested and not running as part of multi-governance
   if (openSummary && !process.env.SCREENSHOTS_DIR) {
-    const summaryPath = path.join(resultsDir, 'test-results-summary.md');
+    const htmlSummaryPath = path.join(resultsDir, 'test-results-summary.html');
     if (process.platform === 'win32') {
-      require('child_process').spawn('cmd', ['/c', 'start', '', summaryPath], { stdio: 'ignore', detached: true });
+      require('child_process').spawn('cmd', ['/c', 'start', '', htmlSummaryPath], { stdio: 'ignore', detached: true });
     } else {
       const openCmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
-      require('child_process').spawn(openCmd, [summaryPath], { stdio: 'ignore', detached: true });
+      require('child_process').spawn(openCmd, [htmlSummaryPath], { stdio: 'ignore', detached: true });
     }
   }
 }
