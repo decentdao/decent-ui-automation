@@ -19,15 +19,18 @@ BaseSeleniumTest.run(async (test) => {
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   
   // Find the first proposal link (needs extra time to load)
-  const proposalLink = await test.waitForElement(By.css('a[href^="/proposals/"]'), { extra: 10000 });
-  const proposalText = await proposalLink.getText();
+  const proposalSelector = By.css('a[href^="/proposals/"]');
+  const proposalLink1 = await test.waitForElement(proposalSelector, { extra: 10000 });
+  // Re-locate the element before getting text to avoid staleness
+  const proposalText = await (await test.driver!.findElement(proposalSelector)).getText();
   
   // Look for hash pattern: # followed by alphanumeric characters (like #4824 or #4a59)
   const hashMatch = proposalText.match(/#([a-fA-F0-9]+)/);
   if (!hashMatch) throw new Error('No proposal hash found in proposal text!');
   proposalHash = hashMatch[0]; // Keep the full hash including the # symbol
-  
-  await proposalLink.click();
+  // Re-locate the element before clicking to avoid staleness
+  const proposalLink2 = await test.driver!.findElement(proposalSelector);
+  await proposalLink2.click();
   await test.driver!.sleep(500);
   
   // Wait for the proposal hash to appear on the overview page (should be in title, not breadcrumbs)

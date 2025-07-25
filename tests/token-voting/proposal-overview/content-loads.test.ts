@@ -17,12 +17,15 @@ BaseSeleniumTest.run(async (test) => {
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Find the first proposal link (needs extra time to load)
-  const proposalLink = await test.waitForElement(By.css('a[href^="/proposals/"]'), { extra: 10000 });
-  const href = await proposalLink.getAttribute('href');
+  const proposalSelector = By.css('a[href^="/proposals/"]');
+  const proposalLink1 = await test.waitForElement(proposalSelector, { extra: 10000 });
+  const href = await proposalLink1.getAttribute('href');
   const match = href.match(/\/proposals\/(\d+)/);
   if (!match) throw new Error('No proposal link found!');
   proposalNumber = match[1];
-  await proposalLink.click();
+  // Re-locate the element before clicking to avoid staleness
+  const proposalLink2 = await test.driver!.findElement(proposalSelector);
+  await proposalLink2.click();
   await test.driver!.sleep(500);
   // Wait for the proposal number to appear on the overview page
   await test.waitForElement(By.xpath(`//*[contains(text(), '#${proposalNumber}')]`));
