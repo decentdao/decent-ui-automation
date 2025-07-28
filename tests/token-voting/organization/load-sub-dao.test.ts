@@ -31,25 +31,37 @@ BaseSeleniumTest.run(async (test) => {
 
   // Sub DAOs may load in any order, so pick the last one found
   const anySubDaoFavorite = daoFavoriteElements[daoFavoriteElements.length - 1];
-  // Move up to the immediate parent div of the favorite button (sub DAO block)
-  const subDaoBlock = await anySubDaoFavorite.findElement(By.xpath('ancestor::div[1]'));
+  // Move up to the ancestor <a> element (the clickable sub DAO link)
+  const subDaoLink = await anySubDaoFavorite.findElement(By.xpath('ancestor::a'));
+  // For address/name extraction, move down to the chakra-stack inside the link
+  const subDaoBlock = await subDaoLink.findElement(By.css('div.chakra-stack'));
 
-  // Get the sub DAO name from the block
   // Get the sub DAO name and abbreviated address from the block
   const subDaoNameElem = await subDaoBlock.findElement(By.css('p.chakra-text'));
   const subDaoName = await subDaoNameElem.getText();
   let subDaoAbbrevAddr = '';
   try {
-    const addrElem = await subDaoBlock.findElement(By.css('p.chakra-text + p.chakra-text'));
-    subDaoAbbrevAddr = await addrElem.getText();
-    console.log(`Found sub DAO abbreviated address: ${subDaoAbbrevAddr}`);
-  } catch {}
+    const textElems = await subDaoBlock.findElements(By.css('p.chakra-text'));
+    for (const elem of textElems) {
+      const txt = (await elem.getText()).trim();
+      if (/^0x[0-9a-f]{4,}\.{3,}[0-9a-f]{3,}$/i.test(txt)) {
+        subDaoAbbrevAddr = txt;
+        console.log(`Found sub DAO abbreviated address: ${subDaoAbbrevAddr}`);
+        break;
+      }
+    }
+    if (!subDaoAbbrevAddr) {
+      console.log('No abbreviated address found in any p.chakra-text in sub DAO block.');
+    }
+  } catch (err) {
+    console.log('Error while searching for abbreviated address in p.chakra-text:', err);
+  }
   console.log(`Found sub DAO name: ${subDaoName}`);
 
-  // Scroll the sub DAO block into view before clicking
-  await test.driver!.executeScript('arguments[0].scrollIntoView({block: "center"});', subDaoBlock);
+  // Scroll the sub DAO link into view before clicking
+  await test.driver!.executeScript('arguments[0].scrollIntoView({block: "center"});', subDaoLink);
   await test.driver!.sleep(500); // Small delay to allow scroll animation
-  await subDaoBlock.click();
+  await subDaoLink.click();
 
   // Wait for the sub DAO homepage to load and check for the name using data-testid
   await test.driver!.sleep(1500); // Delay to allow name to load (without delay DAO address is shown instead)

@@ -12,6 +12,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Scroll is required because there's a conflict with underlying elements. In this case, the 'Parent' button on the DAO homepage.
   await test.driver!.executeScript("window.scrollBy(0, 100);");
+  await test.driver!.sleep(500); // Small delay to allow scroll animation
   // Click the 'Manage DAO' button
   const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   await manageBtn.click();

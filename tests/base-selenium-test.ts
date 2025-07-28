@@ -65,15 +65,8 @@ export class BaseSeleniumTest {
 
     this.driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
     
-    // Handle window sizing for both headed and headless modes
-    if (noHeadless) {
-      // In headed mode, maximize to use full screen
-      await this.driver.manage().window().maximize();
-    } else {
-      // In headless mode, set explicit large dimensions to ensure UI elements are accessible
-      // Use extra height to account for any virtual chrome elements
-      await this.driver.manage().window().setRect({ width: 1920, height: 1400 });
-    }
+    // Set explicit window size in both headed and headless modes for consistency
+    await this.driver.manage().window().setRect({ width: 1920, height: 1400 });
   }
 
   async saveScreenshot(timeoutMs = 10000) {
