@@ -13,6 +13,11 @@ const test = new BaseSeleniumTest('settings', 'governance-tab');
 BaseSeleniumTest.run(async (test) => {
   // Load the DAO homepage
   await test.start();
+
+  // Maybe setting the window size will help with the click interception issue
+  await test.driver!.manage().window().setRect({ width: 1400, height: 1000 });
+
+
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Click the 'Manage DAO' button
