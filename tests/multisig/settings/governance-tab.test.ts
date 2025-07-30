@@ -4,36 +4,45 @@ import { BaseSeleniumTest } from '../../base-selenium-test';
 import { By } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 
-/* This test is extremely flaky for some reason. It seems identical to the token-voting test, but it struggles
-to click the governance tab. Most failures have been when the test thinks that the tab has been clicked, but
-the tab contents have not loaded. There have been many attempts at addressing this, but the underlying issue
-seems to have to do with the modal/overlay resulting in clicks being intercepted by other elements. */
+/* There are very specific things we need to do to ensure this test is stable.
+Unfortunately, if the test runs in CI, it tends to run slower and this is where things fall apart.
+For some reason, when the test runs quickly, it has no trouble using the paragraph text as reference
+for the tab. But when the page has more time to load, it catches the wrong element, which is underneath
+the settings modal. Therefore, the test must account for both possibilities. */
 
 const test = new BaseSeleniumTest('settings', 'governance-tab');
 BaseSeleniumTest.run(async (test) => {
   // Load the DAO homepage
   await test.start();
 
-  // Maybe setting the window size will help with the click interception issue
-  await test.driver!.manage().window().setRect({ width: 1400, height: 1000 });
-
-
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Click the 'Manage DAO' button
   const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   await manageBtn.click();
-  // Click on the 'Governance' tab using JavaScript to bypass click interception
-  const governanceTab = await test.waitForElement(By.xpath("//p[text()='Governance']"));
+  // Find all <p> elements with text 'Governance'
+  const governanceTabs = await test.driver!.findElements(By.xpath("//p[text()='Governance']"));
+  if (governanceTabs.length === 0) {
+    throw new Error('Could not find any <p> element with text "Governance".');
+  }
 
-  // Try using the actions API to click the tab
+  // Try the first <p> element
+  let found = false;
   const actions = test.driver!.actions({ bridge: true });
-  await actions.move({ origin: governanceTab }).click().perform();
-
-  // This is the method that should work, as it works with token-voting
-  // await test.driver!.executeScript("arguments[0].click();", governanceTab);
-
-  // Wait for the signer input with value starting with "0x"
-  await test.waitForElement(By.css('input[value^="0x"]'));
+  await actions.move({ origin: governanceTabs[0] }).click().perform();
+  try {
+    await test.waitForElement(By.css('input[value^="0x"]'), 2000);
+    found = true;
+  } catch (e) {
+    // Not found, try the second <p> element if it exists
+    if (governanceTabs.length > 1) {
+      await actions.move({ origin: governanceTabs[1] }).click().perform();
+      await test.waitForElement(By.css('input[value^="0x"]'), 2000);
+      found = true;
+    }
+  }
+  if (!found) {
+    throw new Error('Governance tab could not be activated by clicking either <p> element.');
+  }
   console.log('Governance tab clicked and signer address found.');
 }, test);
