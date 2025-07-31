@@ -255,7 +255,7 @@ async function runAllGovernanceTests() {
         let match;
         while ((match = tableRowRegex.exec(htmlContent)) !== null) {
           const testName = match[1].replace(/<span.*?<\/span>/g, '').trim(); // Remove error link spans
-          const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️ Skipped' : match[2] === 'NO RUN' ? '⚪ NO RUN' : '❌';
+          const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️' : match[2] === 'NO RUN' ? '⚪' : '❌';
           const runTime = match[3];
           const screenshot = 'Available'; // We know screenshots exist since HTML is generated
           
@@ -345,7 +345,7 @@ async function runAllGovernanceTests() {
           let match;
           while ((match = tableRowRegex.exec(html)) !== null) {
             const testName = match[1].replace(/<span.*?<\/span>/g, '').trim(); // Remove error link spans
-            const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️ Skipped' : match[2] === 'NO RUN' ? '⚪ NO RUN' : '❌';
+            const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️' : match[2] === 'NO RUN' ? '⚪' : '❌';
             const runTime = match[3];
             const screenshot = 'Available'; // We know screenshots exist since HTML is generated
             

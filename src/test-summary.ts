@@ -98,7 +98,7 @@ function generateMarkdownSummary(testResults: TestResult[], options: {
     } else if (r.crashed) {
       resultEmoji = '⚪';
     } else if (r.errorMsg === 'Skipped due to header-loads failure.') {
-      resultEmoji = '⚠️ Skipped';
+      resultEmoji = '⚠️';
     } else {
       resultEmoji = '❌';
     }
@@ -369,6 +369,7 @@ export async function generateCombinedSummary(
   
   combinedMd += `**Legend:**\n`;
   combinedMd += `\n- Each cell shows: result (✅/❌), run time, and screenshot status.\n`;
+  combinedMd += `- ✅ = Passed, ❌ = Failed, ⚪ = No Run, ⚠️ = Skipped\n`;
   combinedMd += `- Example: \`✅ (2.29s, Available)\` means the test passed, took 2.29 seconds, and a screenshot is available.\n`;
   combinedMd += `- \`N/A\` means the test was not run for that governance type.\n\n`;
   
