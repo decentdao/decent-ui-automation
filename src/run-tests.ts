@@ -1,430 +1,199 @@
 // Unified test runner - handles both single governance and all governance types
-import { initializeReleaseUrl, getEnvironmentUrl } from '../config/environments';
-
-// Robust argument parsing: collect CLI args from process.argv, npm_config_argv, and npm_lifecycle_script
-function getAllCliArgs(): string[] {
-  const args: string[] = [];
-  
-  // 1. process.argv (direct node/ts-node invocation)
-  if (process.argv && process.argv.length > 2) {
-    args.push(...process.argv.slice(2));
-  }
-  
-  // 2. npm_config_* environment variables (npm run ... -- --flag becomes npm_config_flag=true)
-  Object.keys(process.env).forEach(key => {
-    if (key.startsWith('npm_config_') && !key.match(/^npm_config_(cache|globalconfig|global_prefix|init_module|local_prefix|node_gyp|noproxy|npm_version|prefix|userconfig|user_agent)$/)) {
-      const flagName = key.replace('npm_config_', '');
-      const value = process.env[key];
-      if (value === 'true') {
-        args.push(`--${flagName}`);
-      } else if (value === '' && flagName !== 'file') {
-        // Handle flags like --no-headless which become npm_config_headless=''
-        // Special case: convert headless back to no-headless
-        if (flagName === 'headless') {
-          args.push('--no-headless');
-        } else {
-          args.push(`--${flagName}`);
-        }
-      } else if (value && value !== 'false') {
-        args.push(`--${flagName}=${value}`);
-      }
-    }
-  });
-  
-  // 3. npm_config_argv (npm run ... -- ...)
-  if (process.env.npm_config_argv) {
-    try {
-      const npmArgv = JSON.parse(process.env.npm_config_argv);
-      if (npmArgv && Array.isArray(npmArgv.original)) {
-        // For npm scripts, we want everything after the script name and "--"
-        const orig = npmArgv.original;
-        const dashDashIndex = orig.indexOf('--');
-        if (dashDashIndex !== -1 && dashDashIndex < orig.length - 1) {
-          // Take everything after "--"
-          args.push(...orig.slice(dashDashIndex + 1));
-        }
-      }
-    } catch {}
-  }
-  
-  // 4. npm_lifecycle_script (sometimes contains the full script line)
-  if (process.env.npm_lifecycle_script) {
-    const scriptLine = process.env.npm_lifecycle_script;
-    // Extract args after the script name
-    const match = scriptLine.match(/\s(--?.*)$/);
-    if (match && match[1]) {
-      // Split by space, but keep quoted args together
-      const parts = match[1].match(/("[^"]+"|'[^']+'|[^\s]+)/g);
-      if (parts) args.push(...parts.map(s => s.replace(/^['"]|['"]$/g, '')));
-    }
-  }
-  
-  // Remove duplicates
-  return [...new Set(args)];
-}
-
-const argv = getAllCliArgs();
-import { spawn } from 'child_process';
-import { maxConcurrency } from '../config/test-settings';
+import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
+import { initializeReleaseUrl, getEnvironmentUrl } from '../config/environments';
+import { maxConcurrency } from '../config/test-settings';
 import { generateTestSummary, generateCombinedSummary, TestResult } from './test-summary';
-const os = require('os');
-const tsNodeBin = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'ts-node.cmd' : 'ts-node');
 
-// Declare resultsDir at the top for use throughout the file
-const resultsDir = path.join(process.cwd(), 'test-results');
+// Constants
+const GOVERNANCE_TYPES = ['erc20', 'erc721', 'multisig'] as const;
+const ALL_GOVERNANCE_TYPES = [...GOVERNANCE_TYPES, 'general'] as const;
+const RESULTS_DIR = path.join(process.cwd(), 'test-results');
+const TS_NODE_BIN = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'ts-node.cmd' : 'ts-node');
 
-// Detect if this is a child process to suppress redundant console output
-const isChildProcess = argv.some(arg => arg.startsWith('--governance='));
+// Types
+type GovernanceType = typeof ALL_GOVERNANCE_TYPES[number];
+type TestExecutionMode = 'single-file' | 'all-governance' | 'single-governance';
+type ParsedArgs = {
+  mode: TestExecutionMode;
+  governanceType?: GovernanceType;
+  filePath?: string;
+  testFiles: string[];
+  environment: string;
+  baseUrl?: string;
+  flags?: string;
+  debugMode: boolean;
+  isChildProcess: boolean;
+};
 
-// Check if this should run all governance types (default behavior)
-const debugMode = argv.some(arg => arg === '--debug' || arg === 'debug');
-const governanceArg = argv.find(arg => arg.startsWith('--governance='));
-const testFileArgs = argv.filter(arg => arg.endsWith('.test.ts'));
+// Utility Classes
+class ArgumentParser {
+  private readonly argv: string[];
 
-// Handle --file= argument for single test execution
-const fileArg = argv.find(arg => arg.startsWith('--file='));
-
-// Handle --env= argument
-const envArg = argv.find(arg => arg.startsWith('--env='));
-const testEnv = envArg ? envArg.split('=')[1] : 'develop';
-
-// Handle --base-url= argument (npm converts hyphens to underscores)
-const baseUrlArg = argv.find(arg => arg.startsWith('--base-url=') || arg.startsWith('--base_url='));
-if (baseUrlArg) {
-  process.env.BASE_URL = baseUrlArg.split('=')[1];
-  if (!isChildProcess) {
-    console.log(`[run-tests] Custom base URL set: ${process.env.BASE_URL}`);
+  constructor() {
+    this.argv = this.getAllCliArgs();
   }
-}
 
-// Handle --flags= argument
-const flagsArg = argv.find(arg => arg.startsWith('--flags='));
-if (flagsArg) {
-  process.env.TEST_FLAGS = flagsArg.split('=')[1];
-  if (!isChildProcess) {
-    console.log(`[run-tests] Feature flags set: ${process.env.TEST_FLAGS}`);
-  }
-}
+  parse(): ParsedArgs {
+    const fileArg = this.argv.find(arg => arg.startsWith('--file='));
+    const governanceArg = this.argv.find(arg => arg.startsWith('--governance='));
+    const testFileArgs = this.argv.filter(arg => arg.endsWith('.test.ts'));
+    const debugMode = this.argv.some(arg => arg === '--debug' || arg === 'debug');
+    const isChildProcess = this.argv.some(arg => arg.startsWith('--governance='));
 
-// Set TEST_ENV for backward compatibility with existing code
-process.env.TEST_ENV = testEnv;
-if (testEnv !== 'develop') {
-  console.log(`[run-tests] Environment set to: ${testEnv}`);
-}
+    // Determine execution mode
+    let mode: TestExecutionMode;
+    let governanceType: GovernanceType | undefined;
+    let filePath: string | undefined;
 
-// Display base URL info once at startup
-let baseUrlDisplayed = false;
-function displayBaseUrlOnce() {
-  if (!baseUrlDisplayed && !isChildProcess) {
-    const { displayBaseUrlInfo } = require('../tests/test-helpers');
-    const { env, baseUrl, source } = displayBaseUrlInfo();
-    baseUrlDisplayed = true;
-    return { env, baseUrl, source };
-  }
-  // For subsequent calls or child processes, just return the info without console output
-  const { getEnv, getBaseUrl } = require('../tests/test-helpers');
-  const env = getEnv();
-  const baseUrl = getBaseUrl();
-  const source = process.env.BASE_URL ? 'BASE_URL override' : `${env} environment`;
-  return { env, baseUrl, source };
-}
-
-// If a specific test file is provided, determine governance type from path and use single governance mode
-let singleGovernanceMode = !!governanceArg;
-if (!singleGovernanceMode && testFileArgs.length > 0) {
-  // Auto-detect governance type from test file path
-  const testFile = testFileArgs[0];
-  if (testFile.includes('multisig/') || testFile.includes('multisig\\') || testFile.includes('/multisig/') || testFile.includes('\\multisig\\')) {
-    argv.push('--governance=multisig');
-    singleGovernanceMode = true;
-  } else if (testFile.includes('token-voting/') || testFile.includes('token-voting\\') || testFile.includes('/token-voting/') || testFile.includes('\\token-voting\\')) {
-    argv.push('--governance=erc20');
-    singleGovernanceMode = true;
-  }
-}
-
-// If not in single governance mode, run all governance types (including debug mode)
-const runAllGovernanceTypes = !singleGovernanceMode && !fileArg;
-
-(async () => {
-  if (fileArg) {
-    await runSingleFile();
-  } else if (runAllGovernanceTypes) {
-    await runAllGovernanceTests();
-  } else {
-    await runSingleGovernanceTests();
-  }
-})();
-
-async function runSingleFile() {
-  const filePath = fileArg!.split('=')[1];
-  
-  // Display which base URL will be used
-  const { displayBaseUrlInfo } = require('../tests/test-helpers');
-  displayBaseUrlInfo();
-  
-  console.log(`\n===== Running single test file: ${filePath} =====`);
-  
-  // Filter out the --file= argument but keep all other arguments for the test
-  const testArgs = argv.filter(arg => !arg.startsWith('--file='));
-  
-  const { spawn } = require('child_process');
-  const proc = spawn('npx', ['ts-node', filePath, ...testArgs], {
-    stdio: 'inherit',
-    shell: true
-  });
-  
-  proc.on('close', (code: number | null) => {
-    process.exit(code || 0);
-  });
-}
-
-async function runAllGovernanceTests() {
-  // Initialize release URL if running in release mode
-  if (process.env.TEST_ENV === 'release') {
-    console.log('Initializing release environment...');
-    try {
-      await initializeReleaseUrl();
-      // Store the release URL in an environment variable for child processes
-      const releaseUrl = await getEnvironmentUrl('release');
-      process.env.RELEASE_URL = releaseUrl;
-      console.log(`[run-tests] Release URL stored for child processes: ${releaseUrl}`);
-    } catch (error) {
-      console.error('Failed to initialize release environment:', error);
-      process.exit(1);
+    if (fileArg) {
+      mode = 'single-file';
+      filePath = fileArg.split('=')[1];
+    } else if (governanceArg || this.shouldUseSingleGovernanceMode(testFileArgs)) {
+      mode = 'single-governance';
+      governanceType = this.parseGovernanceType(governanceArg, testFileArgs);
+    } else {
+      mode = 'all-governance';
     }
+
+    return {
+      mode,
+      governanceType,
+      filePath,
+      testFiles: testFileArgs,
+      environment: this.parseEnvironment(),
+      baseUrl: this.parseBaseUrl(),
+      flags: this.parseFlags(),
+      debugMode,
+      isChildProcess
+    };
   }
 
-  // Display which base URL will be used
-  const { env, baseUrl, source } = displayBaseUrlOnce();
-
-  const governanceTypes = ['erc20', 'erc721', 'multisig'];
-  const wallClockStart = Date.now();
-  
-  if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true });
-  
-  let allPassed = true;
-  let firstTimestamp = '';
-  let totalDuration = 0;
-  let totalPassed = 0;
-  let totalFailed = 0;
-  let totalCrashed = 0;
-  let totalSkipped = 0;
-  let totalCount = 0;
-  
-  // Store results for each governance type
-  const resultsByGov: Record<string, Record<string, { result: string, runTime: string, screenshot: string }>> = {};
-  const allTestNames = new Set<string>();
-  const allSummaries: string[] = [];
-  
-  // Run general tests once (not governance-specific)
-  console.log(`\n===== Running general tests =====`);
-  const generalScreenshotsDir = path.join(resultsDir, 'screenshots', 'general');
-  if (!fs.existsSync(generalScreenshotsDir)) fs.mkdirSync(generalScreenshotsDir, { recursive: true });
-  
-  // Clear existing general screenshots
-  for (const file of fs.readdirSync(generalScreenshotsDir)) {
-    if (file.endsWith('.png')) fs.unlinkSync(path.join(generalScreenshotsDir, file));
-  }
-  
-  resultsByGov['general'] = {};
-  await new Promise((resolve) => {
-    const args = ['src/run-tests.ts', '--governance=general'];
-    if (debugMode) args.push('--debug');
+  private getAllCliArgs(): string[] {
+    const args: string[] = [];
     
-    const proc = spawn('npx', ['ts-node', ...args], {
-      stdio: 'inherit',
-      shell: true,
-      env: { 
-        ...process.env, 
-        SCREENSHOTS_DIR: generalScreenshotsDir,
-        SKIP_MARKDOWN: 'true' // Skip markdown for individual runs
-      },
-    });
-    
-    proc.on('close', (code) => {
-      // Parse results for general tests (similar to governance-specific parsing)
-      const htmlPath = path.join(resultsDir, 'test-results-summary.html');
-      if (fs.existsSync(htmlPath)) {
-        const htmlContent = fs.readFileSync(htmlPath, 'utf8');
-        
-        // Parse test results from HTML using the same regex as governance tests
-        const tableRowRegex = /<tr class='data-row'><td>(.*?)<\/td><td class='[^']*'>([^<]+)<\/td><td>([^<]*)<\/td><td>.*?<\/td><\/tr>/g;
-        let match;
-        while ((match = tableRowRegex.exec(htmlContent)) !== null) {
-          const testName = match[1].replace(/<span.*?<\/span>/g, '').trim(); // Remove error link spans
-          const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️' : match[2] === 'NO RUN' ? '⚪' : '❌';
-          const runTime = match[3];
-          const screenshot = 'Available'; // We know screenshots exist since HTML is generated
-          
-          allTestNames.add(testName);
-          resultsByGov['general'][testName] = {
-            result,
-            runTime,
-            screenshot
-          };
-        }
-        
-        // Store HTML for combined summary (keep existing HTML generation logic)
-        let html = htmlContent;
-        // Update screenshot paths for general tests
-        const generalScreenshotRegex = new RegExp(`href='screenshots/(?!general/)`, 'g');
-        html = html.replace(generalScreenshotRegex, `href='screenshots/general/`);
-        
-        allSummaries.push(`<h2>Results for governance: general</h2>\n` + html);
-        
-        // Parse totals for general tests (same logic as governance tests)
-        const timestampMatch = htmlContent.match(/<b>Timestamp:<\/b> ([^<]+)<\/p>/);
-        if (!firstTimestamp && timestampMatch) firstTimestamp = timestampMatch[1];
-        
-        const durationMatch = htmlContent.match(/<b>Total run time:<\/b> ([^<]+)<\/p>/);
-        if (durationMatch) {
-          const val = durationMatch[1];
-          if (val.includes('min')) totalDuration += parseFloat(val) * 60;
-          else if (val.includes('s')) totalDuration += parseFloat(val);
-        }
-        
-        const passMatch = htmlContent.match(/<b>(\d+)[/](\d+) tests passed<\/b>/);
-        if (passMatch) {
-          totalPassed += parseInt(passMatch[1]);
-          totalCount += parseInt(passMatch[2]);
-        }
-        
-        const failMatch = htmlContent.match(/title='Failed: (\d+)'/);
-        if (failMatch) totalFailed += parseInt(failMatch[1]);
-        
-        const crashMatch = htmlContent.match(/title='No Run: (\d+)'/);
-        if (crashMatch) totalCrashed += parseInt(crashMatch[1]);
-        
-        const skipMatch = htmlContent.match(/title='Skipped: (\d+)'/);
-        if (skipMatch) totalSkipped += parseInt(skipMatch[1]);
-      }
-      
-      if (code !== 0) allPassed = false;
-      resolve(undefined);
-    });
-  });
-  
-  for (const governanceType of governanceTypes) {
-    resultsByGov[governanceType] = {};
-    console.log(`\n===== Running tests for governance: ${governanceType} =====`);
-    
-    const screenshotsDir = path.join(resultsDir, 'screenshots', governanceType);
-    if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
-    
-    // Clear existing screenshots
-    for (const file of fs.readdirSync(screenshotsDir)) {
-      if (file.endsWith('.png')) fs.unlinkSync(path.join(screenshotsDir, file));
+    // 1. process.argv (direct node/ts-node invocation)
+    if (process.argv && process.argv.length > 2) {
+      args.push(...process.argv.slice(2));
     }
     
-    await new Promise((resolve) => {
-      const args = ['src/run-tests.ts', `--governance=${governanceType}`];
-      if (debugMode) args.push('--debug');
-      
-      const proc = spawn('npx', ['ts-node', ...args], {
-        stdio: 'inherit',
-        shell: true,
-        env: { 
-          ...process.env, 
-          SCREENSHOTS_DIR: screenshotsDir,
-          SKIP_MARKDOWN: 'true' // Use environment variable instead of command line flag
-        },
-      });
-      
-      proc.on('close', (code) => {
-        // Parse the HTML summary for this governance type to extract test results for markdown
-        const htmlPath = path.join(resultsDir, 'test-results-summary.html');
-        let html = '';
-        if (fs.existsSync(htmlPath)) {
-          html = fs.readFileSync(htmlPath, 'utf8');
-          
-          // Parse test results from HTML immediately before it gets overwritten
-          const tableRowRegex = /<tr class='data-row'><td>(.*?)<\/td><td class='[^']*'>([^<]+)<\/td><td>([^<]*)<\/td><td>.*?<\/td><\/tr>/g;
-          let match;
-          while ((match = tableRowRegex.exec(html)) !== null) {
-            const testName = match[1].replace(/<span.*?<\/span>/g, '').trim(); // Remove error link spans
-            const result = match[2] === 'PASS' ? '✅' : match[2] === 'SKIPPED' ? '⚠️' : match[2] === 'NO RUN' ? '⚪' : '❌';
-            const runTime = match[3];
-            const screenshot = 'Available'; // We know screenshots exist since HTML is generated
-            
-            allTestNames.add(testName);
-            resultsByGov[governanceType][testName] = {
-              result,
-              runTime,
-              screenshot
-            };
+    // 2. npm_config_* environment variables
+    Object.keys(process.env).forEach(key => {
+      if (key.startsWith('npm_config_') && !this.isExcludedNpmConfig(key)) {
+        const flagName = key.replace('npm_config_', '');
+        const value = process.env[key];
+        
+        if (value === 'true') {
+          args.push(`--${flagName}`);
+        } else if (value === '' && flagName !== 'file') {
+          // Handle flags like --no-headless which become npm_config_headless=''
+          if (flagName === 'headless') {
+            args.push('--no-headless');
+          } else {
+            args.push(`--${flagName}`);
           }
-          
-          // Store HTML for combined summary (keep existing HTML generation logic)
-          const governanceTypeRegex = new RegExp(`href='screenshots/(?!${governanceType}/)`, 'g');
-          html = html.replace(governanceTypeRegex, `href='screenshots/${governanceType}/`);
-          html = html.replace(/id='error-link-(\d+)'/g, `id='${governanceType}-error-link-$1'`)
-                     .replace(/id='error-details-(\d+)'/g, `id='${governanceType}-error-details-$1'`)
-                     .replace(/onclick='toggleError\((\d+)\)'/g, `onclick="toggleError('${governanceType}', $1)"`);
-          
-          allSummaries.push(`<h2>Results for governance: ${governanceType}</h2>\n` + html);
+        } else if (value && value !== 'false') {
+          args.push(`--${flagName}=${value}`);
         }
-        
-        const timestampMatch = html.match(/<b>Timestamp:<\/b> ([^<]+)<\/p>/);
-        if (!firstTimestamp && timestampMatch) firstTimestamp = timestampMatch[1];
-        
-        const durationMatch = html.match(/<b>Total run time:<\/b> ([^<]+)<\/p>/);
-        if (durationMatch) {
-          const val = durationMatch[1];
-          if (val.includes('min')) totalDuration += parseFloat(val) * 60;
-          else if (val.includes('s')) totalDuration += parseFloat(val);
-        }
-        
-        const passMatch = html.match(/<b>(\d+)[/](\d+) tests passed<\/b>/);
-        if (passMatch) {
-          totalPassed += parseInt(passMatch[1]);
-          totalCount += parseInt(passMatch[2]);
-        }
-        
-        const failMatch = html.match(/title='Failed: (\d+)'/);
-        if (failMatch) totalFailed += parseInt(failMatch[1]);
-        
-        const crashMatch = html.match(/title='No Run: (\d+)'/);
-        if (crashMatch) totalCrashed += parseInt(crashMatch[1]);
-        
-        const skipMatch = html.match(/title='Skipped: (\d+)'/);
-        if (skipMatch) totalSkipped += parseInt(skipMatch[1]);
-        
-        if (code !== 0) allPassed = false;
-        resolve(undefined);
-      });
+      }
     });
+    
+    // 3. npm_config_argv (npm run ... -- ...)
+    if (process.env.npm_config_argv) {
+      try {
+        const npmArgv = JSON.parse(process.env.npm_config_argv);
+        if (npmArgv && Array.isArray(npmArgv.original)) {
+          const orig = npmArgv.original;
+          const dashDashIndex = orig.indexOf('--');
+          if (dashDashIndex !== -1 && dashDashIndex < orig.length - 1) {
+            args.push(...orig.slice(dashDashIndex + 1));
+          }
+        }
+      } catch {}
+    }
+    
+    // 4. npm_lifecycle_script
+    if (process.env.npm_lifecycle_script) {
+      const scriptLine = process.env.npm_lifecycle_script;
+      const match = scriptLine.match(/\s(--?.*)$/);
+      if (match && match[1]) {
+        const parts = match[1].match(/("[^"]+"|'[^']+'|[^\s]+)/g);
+        if (parts) args.push(...parts.map(s => s.replace(/^['"]|['"]$/g, '')));
+      }
+    }
+    
+    return [...new Set(args)];
   }
-  
-  // Generate combined summary
-  await generateCombinedSummary(
-    resultsByGov,
-    allTestNames,
-    wallClockStart,
-    firstTimestamp,
-    totalPassed,
-    totalCount,
-    totalFailed,
-    totalCrashed,
-    totalSkipped,
-    totalDuration,
-    resultsDir,
-    allSummaries,
-    baseUrl
-  );
-  
-  process.exit(allPassed ? 0 : 1);
+
+  private isExcludedNpmConfig(key: string): boolean {
+    return key.match(/^npm_config_(cache|globalconfig|global_prefix|init_module|local_prefix|node_gyp|noproxy|npm_version|prefix|userconfig|user_agent)$/) !== null;
+  }
+
+  private shouldUseSingleGovernanceMode(testFileArgs: string[]): boolean {
+    if (testFileArgs.length === 0) return false;
+    
+    const testFile = testFileArgs[0];
+    const isMultisig = testFile.includes('multisig/') || testFile.includes('multisig\\') || 
+                     testFile.includes('/multisig/') || testFile.includes('\\multisig\\');
+    const isTokenVoting = testFile.includes('token-voting/') || testFile.includes('token-voting\\') || 
+                         testFile.includes('/token-voting/') || testFile.includes('\\token-voting\\');
+    
+    if (isMultisig) {
+      this.argv.push('--governance=multisig');
+      return true;
+    } else if (isTokenVoting) {
+      this.argv.push('--governance=erc20');
+      return true;
+    }
+    
+    return false;
+  }
+
+  private parseGovernanceType(governanceArg?: string, testFileArgs?: string[]): GovernanceType {
+    if (governanceArg) {
+      const val = governanceArg.split('=')[1].toLowerCase();
+      if (ALL_GOVERNANCE_TYPES.includes(val as GovernanceType)) {
+        return val as GovernanceType;
+      }
+    }
+    return 'erc20'; // default
+  }
+
+  private parseEnvironment(): string {
+    const envArg = this.argv.find(arg => arg.startsWith('--env='));
+    return envArg ? envArg.split('=')[1] : 'develop';
+  }
+
+  private parseBaseUrl(): string | undefined {
+    const baseUrlArg = this.argv.find(arg => arg.startsWith('--base-url=') || arg.startsWith('--base_url='));
+    return baseUrlArg ? baseUrlArg.split('=')[1] : undefined;
+  }
+
+  private parseFlags(): string | undefined {
+    const flagsArg = this.argv.find(arg => arg.startsWith('--flags='));
+    if (flagsArg) {
+      return flagsArg.replace('--flags=', '');
+    }
+    
+    // If not found, but a single non-option arg exists, treat it as flags
+    const bareFlags = this.argv.find(arg => !arg.startsWith('--') && !arg.endsWith('.test.ts'));
+    return bareFlags || undefined;
+  }
+
+  getFilteredArgs(excludePatterns: string[] = []): string[] {
+    return this.argv.filter(arg => !excludePatterns.some(pattern => arg.startsWith(pattern)));
+  }
 }
 
-async function runSingleGovernanceTests() {
-  // Initialize release URL if running in release mode
-  if (process.env.TEST_ENV === 'release') {
+class EnvironmentManager {
+  static async initializeReleaseEnvironment(): Promise<void> {
+    if (process.env.TEST_ENV !== 'release') return;
+
     console.log('Initializing release environment...');
     try {
       await initializeReleaseUrl();
-      // Store the release URL in an environment variable for child processes
       const releaseUrl = await getEnvironmentUrl('release');
       process.env.RELEASE_URL = releaseUrl;
       console.log(`[run-tests] Release URL stored for child processes: ${releaseUrl}`);
@@ -434,70 +203,112 @@ async function runSingleGovernanceTests() {
     }
   }
 
-  // Display which base URL will be used
-  const { env, baseUrl, source } = displayBaseUrlOnce();
+  static setupEnvironmentVariables(args: ParsedArgs): void {
+    // Set TEST_ENV for backward compatibility
+    process.env.TEST_ENV = args.environment;
+    
+    if (args.baseUrl) {
+      process.env.BASE_URL = args.baseUrl;
+      if (!args.isChildProcess) {
+        console.log(`[run-tests] Custom base URL set: ${args.baseUrl}`);
+      }
+    }
+    
+    if (args.flags) {
+      process.env.TEST_FLAGS = args.flags;
+      if (!args.isChildProcess) {
+        console.log(`[run-tests] Feature flags set: ${args.flags}`);
+      }
+    }
+    
+    if (args.environment !== 'develop') {
+      console.log(`[run-tests] Environment set to: ${args.environment}`);
+    }
+  }
 
-  // Use custom screenshots dir if provided (for multi-governance runs)
-  const screenshotsDir = process.env.SCREENSHOTS_DIR || path.join(resultsDir, 'screenshots');
+  static displayBaseUrlInfo(suppressOutput: boolean = false): { env: string; baseUrl: string; source: string } {
+    if (!suppressOutput) {
+      const { displayBaseUrlInfo } = require('../tests/test-helpers');
+      return displayBaseUrlInfo();
+    } else {
+      const { getEnv, getBaseUrl } = require('../tests/test-helpers');
+      const env = getEnv();
+      const baseUrl = getBaseUrl();
+      const source = process.env.BASE_URL ? 'BASE_URL override' : `${env} environment`;
+      return { env, baseUrl, source };
+    }
+  }
+}
 
-  function deleteAllScreenshots(dir: string) {
+class FileSystemManager {
+  static ensureDirectoryExists(dir: string): void {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  }
+
+  static deleteAllScreenshots(dir: string): void {
     if (!fs.existsSync(dir)) return;
+    
     const files = fs.readdirSync(dir);
     for (const file of files) {
       const filePath = path.join(dir, file);
       const stat = fs.statSync(filePath);
+      
       if (stat.isDirectory()) {
-        deleteAllScreenshots(filePath);
-        // Remove empty directories
-        if (fs.readdirSync(filePath).length === 0) fs.rmdirSync(filePath);
+        this.deleteAllScreenshots(filePath);
+        if (fs.readdirSync(filePath).length === 0) {
+          fs.rmdirSync(filePath);
+        }
       } else if (file.endsWith('.png')) {
         fs.unlinkSync(filePath);
       }
     }
   }
 
-  deleteAllScreenshots(screenshotsDir);
-
-  function findTestFiles(dir: string): string[] {
+  static findTestFiles(dir: string): string[] {
     let results: string[] = [];
-    const list = fs.readdirSync(dir).sort(); // Sort directory contents alphabetically
+    const list = fs.readdirSync(dir).sort();
+    
     list.forEach((file) => {
       const filePath = path.join(dir, file);
       const stat = fs.statSync(filePath);
+      
       if (stat && stat.isDirectory()) {
-        results = results.concat(findTestFiles(filePath));
+        results = results.concat(this.findTestFiles(filePath));
       } else if (file.endsWith('.test.ts')) {
         results.push(filePath);
       }
     });
     
-    // Custom sort: group by directory first, then by filename within each directory
-    return results.sort((a, b) => {
+    return this.sortTestFiles(results);
+  }
+
+  private static sortTestFiles(files: string[]): string[] {
+    return files.sort((a, b) => {
       const dirA = path.dirname(a);
       const dirB = path.dirname(b);
       const fileA = path.basename(a);
       const fileB = path.basename(b);
       
-      // First compare directories
       if (dirA !== dirB) {
         return dirA.localeCompare(dirB);
       }
       
-      // If same directory, compare filenames
       return fileA.localeCompare(fileB);
     });
   }
 
-  function findScreenshotPath(testName: string): string | undefined {
-    // Remove any leading governance type from testName to avoid double folders
-    let cleanName = testName.replace(/^(token-voting|multisig|erc20|erc721|general)\//, '');
+  static findScreenshotPath(testName: string, screenshotsDir: string): string | undefined {
+    const cleanName = testName.replace(/^(token-voting|multisig|erc20|erc721|general)\//, '');
     const screenshotRelPath = cleanName.replace(/\\/g, '/').replace(/\.test\.ts$/, '.png');
     const screenshotPath = path.join(screenshotsDir, screenshotRelPath);
-    if (fs.existsSync(screenshotPath)) return screenshotPath;
-    return undefined;
+    return fs.existsSync(screenshotPath) ? screenshotPath : undefined;
   }
 
-  function readTempErrorFile(pid: number): string | undefined {
+  static readTempErrorFile(pid?: number): string | undefined {
+    if (pid === undefined) return undefined;
+    
     const tmpErrorPath = path.join(os.tmpdir(), `selenium-test-error-${pid}.log`);
     if (fs.existsSync(tmpErrorPath)) {
       try {
@@ -508,34 +319,10 @@ async function runSingleGovernanceTests() {
     }
     return undefined;
   }
+}
 
-  function detectCrash(output: string, error: string): boolean {
-    const crashPatterns = [
-      /Fatal error/i,
-      /unreachable code/i,
-      /Segmentation fault/i,
-      /out of memory/i,
-      /SIGKILL/i,
-      /SIGTERM/i
-    ];
-    
-    const combinedOutput = (output + '\n' + error).toLowerCase();
-    
-    // Check for known crash patterns
-    if (crashPatterns.some(pattern => pattern.test(combinedOutput))) {
-      return true;
-    }
-    
-    // Check for process death with minimal output (likely infrastructure failure)
-    const meaningfulOutput = output.trim() + error.trim();
-    if (meaningfulOutput.length < 100 && !meaningfulOutput.includes('PASS') && !meaningfulOutput.includes('FAIL') && !meaningfulOutput.includes('test')) {
-      return true;
-    }
-    
-    return false;
-  }
-
-  function testHasRegressionType(testFile: string, type: string): boolean {
+class TestFilter {
+  static hasRegressionType(testFile: string, type: string): boolean {
     try {
       const content = fs.readFileSync(testFile, 'utf8');
       const match = content.match(/const regressionType = (\[[^\]]+\])/);
@@ -548,101 +335,271 @@ async function runSingleGovernanceTests() {
     return false;
   }
 
-  let governanceType = 'erc20';
-  if (governanceArg) {
-    const val = governanceArg.split('=')[1].toLowerCase();
-    if (["erc20", "erc721", "multisig", "general"].includes(val)) governanceType = val;
+  static filterTests(allTests: string[], args: ParsedArgs): string[] {
+    const regressionTypeFilter = process.env.REGRESSION_TYPE;
+    
+    let filteredTests: string[];
+    
+    if (args.testFiles.length > 0) {
+      filteredTests = args.testFiles.map(f => this.normalizeTestPath(f));
+    } else {
+      filteredTests = regressionTypeFilter
+        ? allTests.filter(f => this.hasRegressionType(f, regressionTypeFilter))
+        : allTests;
+    }
+
+    if (args.debugMode) {
+      filteredTests = filteredTests.slice(0, 5);
+    }
+
+    return filteredTests;
   }
 
-  let testRoot = '';
-  if (governanceType === 'multisig') {
-    testRoot = path.join(process.cwd(), 'tests', 'multisig');
-  } else if (governanceType === 'general') {
-    testRoot = path.join(process.cwd(), 'tests', 'general');
-  } else {
-    testRoot = path.join(process.cwd(), 'tests', 'token-voting');
+  private static normalizeTestPath(testFile: string): string {
+    if (path.isAbsolute(testFile)) {
+      return testFile;
+    }
+    
+    if (!testFile.startsWith('tests/') && !testFile.startsWith('tests\\')) {
+      testFile = path.join('tests', testFile);
+    }
+    
+    return path.join(process.cwd(), testFile);
   }
-  const tests = findTestFiles(testRoot);
+}
 
-  const colors = {
+class ProcessManager {
+  static createTestProcess(testFile: string, governanceType: GovernanceType, testFlags: string): ChildProcess {
+    const isWin = process.platform === 'win32';
+    
+    if (isWin) {
+      const cmd = `"${TS_NODE_BIN}" "${testFile}" --governance=${governanceType}`;
+      return spawn(cmd, [], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true,
+        env: { ...process.env, TEST_FLAGS: testFlags },
+      });
+    } else {
+      return spawn(TS_NODE_BIN, [testFile, `--governance=${governanceType}`], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: false,
+        env: { ...process.env, TEST_FLAGS: testFlags },
+      });
+    }
+  }
+
+  static detectCrash(output: string, error: string): boolean {
+    const crashPatterns = [
+      /Fatal error/i,
+      /unreachable code/i,
+      /Segmentation fault/i,
+      /out of memory/i,
+      /SIGKILL/i,
+      /SIGTERM/i
+    ];
+    
+    const combinedOutput = (output + '\n' + error).toLowerCase();
+    
+    if (crashPatterns.some(pattern => pattern.test(combinedOutput))) {
+      return true;
+    }
+    
+    const meaningfulOutput = output.trim() + error.trim();
+    if (meaningfulOutput.length < 100 && 
+        !meaningfulOutput.includes('PASS') && 
+        !meaningfulOutput.includes('FAIL') && 
+        !meaningfulOutput.includes('test')) {
+      return true;
+    }
+    
+    return false;
+  }
+}
+
+class HtmlResultParser {
+  static parseTestResultsFromHtml(htmlContent: string): Array<{
+    testName: string;
+    result: string;
+    runTime: string;
+    screenshot: string;
+  }> {
+    const results: Array<{ testName: string; result: string; runTime: string; screenshot: string }> = [];
+    const tableRowRegex = /<tr class='data-row'><td>(.*?)<\/td><td class='[^']*'>([^<]+)<\/td><td>([^<]*)<\/td><td>.*?<\/td><\/tr>/g;
+    
+    let match;
+    while ((match = tableRowRegex.exec(htmlContent)) !== null) {
+      const testName = match[1].replace(/<span.*?<\/span>/g, '').trim();
+      const result = match[2] === 'PASS' ? '✅' : 
+                    match[2] === 'SKIPPED' ? '⚠️' : 
+                    match[2] === 'NO RUN' ? '⚪' : '❌';
+      const runTime = match[3];
+      const screenshot = 'Available';
+      
+      results.push({ testName, result, runTime, screenshot });
+    }
+    
+    return results;
+  }
+
+  static parseTotalsFromHtml(htmlContent: string): {
+    timestamp?: string;
+    duration: number;
+    passed: number;
+    total: number;
+    failed: number;
+    crashed: number;
+    skipped: number;
+  } {
+    const timestampMatch = htmlContent.match(/<b>Timestamp:<\/b> ([^<]+)<\/p>/);
+    const timestamp = timestampMatch ? timestampMatch[1] : undefined;
+    
+    let duration = 0;
+    const durationMatch = htmlContent.match(/<b>Total run time:<\/b> ([^<]+)<\/p>/);
+    if (durationMatch) {
+      const val = durationMatch[1];
+      if (val.includes('min')) {
+        duration = parseFloat(val) * 60;
+      } else if (val.includes('s')) {
+        duration = parseFloat(val);
+      }
+    }
+    
+    let passed = 0, total = 0;
+    const passMatch = htmlContent.match(/<b>(\d+)[/](\d+) tests passed<\/b>/);
+    if (passMatch) {
+      passed = parseInt(passMatch[1]);
+      total = parseInt(passMatch[2]);
+    }
+    
+    let failed = 0;
+    const failMatch = htmlContent.match(/title='Failed: (\d+)'/);
+    if (failMatch) failed = parseInt(failMatch[1]);
+    
+    let crashed = 0;
+    const crashMatch = htmlContent.match(/title='No Run: (\d+)'/);
+    if (crashMatch) crashed = parseInt(crashMatch[1]);
+    
+    let skipped = 0;
+    const skipMatch = htmlContent.match(/title='Skipped: (\d+)'/);
+    if (skipMatch) skipped = parseInt(skipMatch[1]);
+    
+    return { timestamp, duration, passed, total, failed, crashed, skipped };
+  }
+
+  static updateScreenshotPaths(html: string, governanceType: GovernanceType): string {
+    if (governanceType === 'general') {
+      const generalScreenshotRegex = new RegExp(`href='screenshots/(?!general/)`, 'g');
+      return html.replace(generalScreenshotRegex, `href='screenshots/general/`);
+    } else {
+      const governanceTypeRegex = new RegExp(`href='screenshots/(?!${governanceType}/)`, 'g');
+      return html.replace(governanceTypeRegex, `href='screenshots/${governanceType}/`)
+                .replace(/id='error-link-(\d+)'/g, `id='${governanceType}-error-link-$1'`)
+                .replace(/id='error-details-(\d+)'/g, `id='${governanceType}-error-details-$1'`)
+                .replace(/onclick='toggleError\((\d+)\)'/g, `onclick="toggleError('${governanceType}', $1)"`);
+    }
+  }
+}
+
+// Main Runner Classes
+class SingleFileRunner {
+  constructor(private args: ParsedArgs, private argParser: ArgumentParser) {}
+
+  async run(): Promise<void> {
+    const { displayBaseUrlInfo } = require('../tests/test-helpers');
+    displayBaseUrlInfo();
+    
+    console.log(`\n===== Running single test file: ${this.args.filePath} =====`);
+    
+    const testArgs = this.argParser.getFilteredArgs(['--file=']);
+    
+    const proc = spawn('npx', ['ts-node', this.args.filePath!, ...testArgs], {
+      stdio: 'inherit',
+      shell: true
+    });
+    
+    proc.on('close', (code: number | null) => {
+      process.exit(code || 0);
+    });
+  }
+}
+
+class SingleGovernanceRunner {
+  private colors = {
     green: '\x1b[32m',
     red: '\x1b[31m',
     gray: '\x1b[90m',
     reset: '\x1b[0m',
   };
 
-  const regressionTypeFilter = process.env.REGRESSION_TYPE;
-  const testFileArgs = argv.filter(arg => arg.endsWith('.test.ts'));
-  
-  // Accept --flags=... or a bare value as the flags
-  let flagsArg = argv.find(arg => arg.startsWith('--flags='));
-  let testFlags = '';
-  if (flagsArg) {
-    testFlags = flagsArg.replace('--flags=', '');
-  } else {
-    // If not found, but a single non-option arg exists, treat it as flags
-    const bareFlags = argv.find(arg => !arg.startsWith('--') && !arg.endsWith('.test.ts'));
-    if (bareFlags) testFlags = bareFlags;
-  }
+  constructor(private args: ParsedArgs) {}
 
-  let filteredTests: string[];
-  if (testFileArgs.length > 0) {
-    filteredTests = testFileArgs.map(f => {
-      if (path.isAbsolute(f)) {
-        return f;
-      }
-      // If it doesn't start with 'tests/', prepend it
-      if (!f.startsWith('tests/') && !f.startsWith('tests\\')) {
-        f = path.join('tests', f);
-      }
-      return path.join(process.cwd(), f);
-    });
-  } else {
-    filteredTests = regressionTypeFilter
-      ? tests.filter(f => testHasRegressionType(f, regressionTypeFilter))
-      : tests;
-  }
-
-  // In debug mode, limit to first 5 tests
-  if (debugMode) {
-    filteredTests = filteredTests.slice(0, 5);
-  }
-
-  // Always capture output for summary, but also print in real time
-  const SHOW_REALTIME_LOGS = true;
-  const wallClockStart = Date.now();
-
-  let allPassed = true;
-  const testResults: TestResult[] = [];
-
-  // Parallel worker pool for test files
-  const queue = [...filteredTests];
-  let running = 0;
-  
-  async function runNext(): Promise<void> {
-    if (queue.length === 0) return;
-    const testFile = queue.shift();
-    if (!testFile) return;
-    running++;
-    let start = Date.now();
+  async run(): Promise<void> {
+    await EnvironmentManager.initializeReleaseEnvironment();
     
-    await new Promise<void>((resolve) => {
-      const isWin = process.platform === 'win32';
-      let proc;
-      if (isWin) {
-        const cmd = `"${tsNodeBin}" "${testFile}" --governance=${governanceType}`;
-        proc = spawn(cmd, [], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: true,
-          env: { ...process.env, TEST_FLAGS: testFlags },
-        });
-      } else {
-        proc = spawn(tsNodeBin, [testFile, `--governance=${governanceType}`], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: false,
-          env: { ...process.env, TEST_FLAGS: testFlags },
-        });
-      }
+    const { env, baseUrl } = EnvironmentManager.displayBaseUrlInfo(this.args.isChildProcess);
+    
+    const screenshotsDir = process.env.SCREENSHOTS_DIR || path.join(RESULTS_DIR, 'screenshots');
+    FileSystemManager.deleteAllScreenshots(screenshotsDir);
+    
+    const tests = this.discoverTests();
+    const filteredTests = TestFilter.filterTests(tests, this.args);
+    
+    const wallClockStart = Date.now();
+    const testResults = await this.executeTests(filteredTests, screenshotsDir);
+    
+    this.generateSummary(testResults, baseUrl, wallClockStart);
+    
+    const allPassed = testResults.every(result => result.passed);
+    process.exit(allPassed ? 0 : 1);
+  }
+
+  private discoverTests(): string[] {
+    const testRoot = this.getTestRoot();
+    return FileSystemManager.findTestFiles(testRoot);
+  }
+
+  private getTestRoot(): string {
+    const governanceType = this.args.governanceType!;
+    
+    if (governanceType === 'multisig') {
+      return path.join(process.cwd(), 'tests', 'multisig');
+    } else if (governanceType === 'general') {
+      return path.join(process.cwd(), 'tests', 'general');
+    } else {
+      return path.join(process.cwd(), 'tests', 'token-voting');
+    }
+  }
+
+  private async executeTests(filteredTests: string[], screenshotsDir: string): Promise<TestResult[]> {
+    const testResults: TestResult[] = [];
+    const queue = [...filteredTests];
+    let running = 0;
+    
+    const runNext = async (): Promise<void> => {
+      if (queue.length === 0) return;
+      const testFile = queue.shift()!;
+      running++;
+      
+      const result = await this.executeTest(testFile, screenshotsDir, Date.now());
+      testResults.push(result);
+      
+      running--;
+      await runNext();
+    };
+    
+    const workers: Promise<void>[] = [];
+    for (let i = 0; i < Math.min(maxConcurrency, filteredTests.length); i++) {
+      workers.push(runNext());
+    }
+    
+    await Promise.all(workers);
+    
+    return this.sortTestResults(testResults);
+  }
+
+  private async executeTest(testFile: string, screenshotsDir: string, startTime: number): Promise<TestResult> {
+    return new Promise((resolve) => {
+      const proc = ProcessManager.createTestProcess(testFile, this.args.governanceType!, this.args.flags || '');
       
       let output = '';
       let error = '';
@@ -651,7 +608,7 @@ async function runSingleGovernanceTests() {
         proc.stdout.on('data', (data) => {
           const str = data.toString();
           output += str;
-          if (SHOW_REALTIME_LOGS && !debugMode) process.stdout.write(str);
+          if (!this.args.debugMode) process.stdout.write(str);
         });
       }
       
@@ -659,119 +616,309 @@ async function runSingleGovernanceTests() {
         proc.stderr.on('data', (data) => {
           const str = data.toString();
           error += str;
-          if (SHOW_REALTIME_LOGS && !debugMode) process.stderr.write(str);
+          if (!this.args.debugMode) process.stderr.write(str);
         });
       }
       
       proc.on('close', (code) => {
-        let testName = path.relative(path.join(__dirname, '..', 'tests'), testFile).replace(/\\/g, '/');
-        testName = testName.replace(/^(token-voting|multisig|erc20|erc721|general)\//, '');
+        const testName = this.getTestName(testFile);
         const passed = code === 0;
-        const crashed = !passed && detectCrash(output, error);
-        let durationMs = Date.now() - start;
+        const crashed = !passed && ProcessManager.detectCrash(output, error);
+        const durationMs = Date.now() - startTime;
+        const screenshotPath = FileSystemManager.findScreenshotPath(testName, screenshotsDir);
         
-        // Check if a screenshot was actually saved
-        const screenshotPath = findScreenshotPath(testName);
+        this.logTestResult(testName, passed, crashed);
         
-        // In debug mode, print all buffered output for this test, then the result line
-        if (debugMode) {
-          if (output.trim()) {
-            process.stdout.write(`\n[${testName}]\n` + output);
-          }
-          if (error.trim()) {
-            process.stderr.write(`\n[${testName} ERROR]\n` + error);
-          }
+        if (this.args.debugMode) {
+          this.logDebugOutput(testName, output, error);
         }
         
-        if (passed) {
-          console.log(`${testName}: ${colors.green}pass${colors.reset}`);
-        } else if (crashed) {
-          allPassed = false;
-          console.log(`${testName}: ${colors.gray}NO RUN${colors.reset}`);
-        } else {
-          allPassed = false;
-          console.log(`${testName}: ${colors.red}fail${colors.reset}`);
-        }
+        const result: TestResult = {
+          name: testName,
+          passed,
+          crashed,
+          screenshotPath,
+          durationMs
+        };
         
         if (!passed) {
-          let msgParts: string[] = [];
-          if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
-          if (error.trim()) msgParts.push('[Error Output]\n' + error.trim());
-          let errorMsg = msgParts.join('\n');
-          
-          const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(output + '\n' + error);
-          if (timeoutMatch && !errorMsg.startsWith(timeoutMatch[0].trim())) {
-            errorMsg = timeoutMatch[0].trim() + '\n' + errorMsg;
-          }
-          
-          const tempError = proc.pid !== undefined ? readTempErrorFile(proc.pid) : undefined;
-          if (tempError && !errorMsg.includes(tempError)) {
-            errorMsg += (errorMsg ? '\n' : '') + tempError;
-          }
-          
-          if (!errorMsg) errorMsg = crashed ? 'Test process crashed (no test execution)' : 'Test failed (no error output)';
-          testResults.push({ name: testName, passed, crashed, errorMsg, screenshotPath, durationMs });
-        } else {
-          testResults.push({ name: testName, passed, crashed: false, screenshotPath, durationMs });
+          result.errorMsg = this.buildErrorMessage(output, error, proc.pid, crashed);
         }
         
-        running--;
-        resolve();
+        resolve(result);
       });
     });
-    
-    await runNext();
-  }
-  
-  // Start up to maxConcurrency workers
-  const workers: Promise<void>[] = [];
-  for (let i = 0; i < Math.min(maxConcurrency, filteredTests.length); i++) {
-    workers.push(runNext());
-  }
-  await Promise.all(workers);
-
-  // Generate test results summary
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  const timestamp = `${pad(now.getMonth()+1)}/${pad(now.getDate())}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-  
-  // Wall-clock total run time
-  const wallClockEnd = Date.now();
-  const wallClockDuration = wallClockEnd - wallClockStart;
-  let totalRunTimeStr = '';
-  const wallClockSeconds = wallClockDuration / 1000;
-  if (wallClockSeconds >= 60) {
-    totalRunTimeStr = (wallClockSeconds / 60).toFixed(1) + ' min';
-  } else {
-    totalRunTimeStr = wallClockSeconds.toFixed(2) + 's';
   }
 
-  // Sort test results by directory first, then by filename within each directory
-  testResults.sort((a, b) => {
-    const dirA = path.dirname(a.name);
-    const dirB = path.dirname(b.name);
-    const fileA = path.basename(a.name);
-    const fileB = path.basename(b.name);
+  private getTestName(testFile: string): string {
+    let testName = path.relative(path.join(__dirname, '..', 'tests'), testFile).replace(/\\/g, '/');
+    return testName.replace(/^(token-voting|multisig|erc20|erc721|general)\//, '');
+  }
+
+  private logTestResult(testName: string, passed: boolean, crashed: boolean): void {
+    if (passed) {
+      console.log(`${testName}: ${this.colors.green}pass${this.colors.reset}`);
+    } else if (crashed) {
+      console.log(`${testName}: ${this.colors.gray}NO RUN${this.colors.reset}`);
+    } else {
+      console.log(`${testName}: ${this.colors.red}fail${this.colors.reset}`);
+    }
+  }
+
+  private logDebugOutput(testName: string, output: string, error: string): void {
+    if (output.trim()) {
+      process.stdout.write(`\n[${testName}]\n` + output);
+    }
+    if (error.trim()) {
+      process.stderr.write(`\n[${testName} ERROR]\n` + error);
+    }
+  }
+
+  private buildErrorMessage(output: string, error: string, pid?: number, crashed?: boolean): string {
+    const msgParts: string[] = [];
+    if (output.trim()) msgParts.push('[Console Output]\n' + output.trim());
+    if (error.trim()) msgParts.push('[Error Output]\n' + error.trim());
     
-    // First compare directories
-    if (dirA !== dirB) {
-      return dirA.localeCompare(dirB);
+    let errorMsg = msgParts.join('\n');
+    
+    const timeoutMatch = /TimeoutError[\s\S]*?(?=\n\s*at|$)/.exec(output + '\n' + error);
+    if (timeoutMatch && !errorMsg.startsWith(timeoutMatch[0].trim())) {
+      errorMsg = timeoutMatch[0].trim() + '\n' + errorMsg;
     }
     
-    // If same directory, compare filenames
-    return fileA.localeCompare(fileB);
-  });
+    const tempError = FileSystemManager.readTempErrorFile(pid);
+    if (tempError && !errorMsg.includes(tempError)) {
+      errorMsg += (errorMsg ? '\n' : '') + tempError;
+    }
+    
+    if (!errorMsg) {
+      errorMsg = crashed ? 'Test process crashed (no test execution)' : 'Test failed (no error output)';
+    }
+    
+    return errorMsg;
+  }
 
-  generateTestSummary(testResults, {
-    resultsDir,
-    governanceType,
-    timestamp,
-    totalRunTimeStr,
-    wallClockDuration,
-    baseUrl,
-    openSummary: !process.env.SCREENSHOTS_DIR, // Only open if not called from multi-governance run
-    skipMarkdown: !!process.env.SKIP_MARKDOWN // Skip markdown when SKIP_MARKDOWN env var is set
-  });
+  private sortTestResults(testResults: TestResult[]): TestResult[] {
+    return testResults.sort((a, b) => {
+      const dirA = path.dirname(a.name);
+      const dirB = path.dirname(b.name);
+      const fileA = path.basename(a.name);
+      const fileB = path.basename(b.name);
+      
+      if (dirA !== dirB) {
+        return dirA.localeCompare(dirB);
+      }
+      
+      return fileA.localeCompare(fileB);
+    });
+  }
 
-  process.exit(allPassed ? 0 : 1);
+  private generateSummary(testResults: TestResult[], baseUrl: string, wallClockStart: number): void {
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const timestamp = `${pad(now.getMonth()+1)}/${pad(now.getDate())}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    
+    const wallClockEnd = Date.now();
+    const wallClockDuration = wallClockEnd - wallClockStart;
+    const wallClockSeconds = wallClockDuration / 1000;
+    const totalRunTimeStr = wallClockSeconds >= 60 ? 
+      (wallClockSeconds / 60).toFixed(1) + ' min' : 
+      wallClockSeconds.toFixed(2) + 's';
+
+    generateTestSummary(testResults, {
+      resultsDir: RESULTS_DIR,
+      governanceType: this.args.governanceType!,
+      timestamp,
+      totalRunTimeStr,
+      wallClockDuration,
+      baseUrl,
+      openSummary: !process.env.SCREENSHOTS_DIR,
+      skipMarkdown: !!process.env.SKIP_MARKDOWN
+    });
+  }
 }
+
+class AllGovernanceRunner {
+  constructor(private args: ParsedArgs) {}
+
+  async run(): Promise<void> {
+    await EnvironmentManager.initializeReleaseEnvironment();
+    
+    const { baseUrl } = EnvironmentManager.displayBaseUrlInfo(this.args.isChildProcess);
+    
+    FileSystemManager.ensureDirectoryExists(RESULTS_DIR);
+    
+    const wallClockStart = Date.now();
+    const stats = this.initializeStats();
+    const resultsByGov: Record<string, Record<string, { result: string, runTime: string, screenshot: string }>> = {};
+    const allTestNames = new Set<string>();
+    const allSummaries: string[] = [];
+    
+    // Run general tests
+    await this.runGovernanceType('general', resultsByGov, allTestNames, allSummaries, stats);
+    
+    // Run governance-specific tests
+    for (const governanceType of GOVERNANCE_TYPES) {
+      await this.runGovernanceType(governanceType, resultsByGov, allTestNames, allSummaries, stats);
+    }
+    
+    await this.generateCombinedSummary(resultsByGov, allTestNames, wallClockStart, stats, allSummaries, baseUrl);
+    
+    process.exit(stats.allPassed ? 0 : 1);
+  }
+
+  private initializeStats() {
+    return {
+      allPassed: true,
+      firstTimestamp: '',
+      totalDuration: 0,
+      totalPassed: 0,
+      totalFailed: 0,
+      totalCrashed: 0,
+      totalSkipped: 0,
+      totalCount: 0
+    };
+  }
+
+  private async runGovernanceType(
+    governanceType: GovernanceType,
+    resultsByGov: Record<string, Record<string, { result: string, runTime: string, screenshot: string }>>,
+    allTestNames: Set<string>,
+    allSummaries: string[],
+    stats: any
+  ): Promise<void> {
+    console.log(`\n===== Running tests for governance: ${governanceType} =====`);
+    
+    const screenshotsDir = path.join(RESULTS_DIR, 'screenshots', governanceType);
+    FileSystemManager.ensureDirectoryExists(screenshotsDir);
+    FileSystemManager.deleteAllScreenshots(screenshotsDir);
+    
+    resultsByGov[governanceType] = {};
+    
+    await this.executeGovernanceTests(governanceType, screenshotsDir, resultsByGov, allTestNames, allSummaries, stats);
+  }
+
+  private async executeGovernanceTests(
+    governanceType: GovernanceType,
+    screenshotsDir: string,
+    resultsByGov: Record<string, Record<string, { result: string, runTime: string, screenshot: string }>>,
+    allTestNames: Set<string>,
+    allSummaries: string[],
+    stats: any
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      const args = ['src/run-tests.ts', `--governance=${governanceType}`];
+      if (this.args.debugMode) args.push('--debug');
+      
+      const proc = spawn('npx', ['ts-node', ...args], {
+        stdio: 'inherit',
+        shell: true,
+        env: { 
+          ...process.env, 
+          SCREENSHOTS_DIR: screenshotsDir,
+          SKIP_MARKDOWN: 'true'
+        },
+      });
+      
+      proc.on('close', (code) => {
+        this.parseAndStoreResults(governanceType, resultsByGov, allTestNames, allSummaries, stats);
+        
+        if (code !== 0) stats.allPassed = false;
+        resolve(undefined);
+      });
+    });
+  }
+
+  private parseAndStoreResults(
+    governanceType: GovernanceType,
+    resultsByGov: Record<string, Record<string, { result: string, runTime: string, screenshot: string }>>,
+    allTestNames: Set<string>,
+    allSummaries: string[],
+    stats: any
+  ): void {
+    const htmlPath = path.join(RESULTS_DIR, 'test-results-summary.html');
+    if (!fs.existsSync(htmlPath)) return;
+    
+    const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+    
+    // Parse individual test results
+    const testResults = HtmlResultParser.parseTestResultsFromHtml(htmlContent);
+    testResults.forEach(({ testName, result, runTime, screenshot }) => {
+      allTestNames.add(testName);
+      resultsByGov[governanceType][testName] = { result, runTime, screenshot };
+    });
+    
+    // Parse totals
+    const totals = HtmlResultParser.parseTotalsFromHtml(htmlContent);
+    if (!stats.firstTimestamp && totals.timestamp) {
+      stats.firstTimestamp = totals.timestamp;
+    }
+    
+    stats.totalDuration += totals.duration;
+    stats.totalPassed += totals.passed;
+    stats.totalCount += totals.total;
+    stats.totalFailed += totals.failed;
+    stats.totalCrashed += totals.crashed;
+    stats.totalSkipped += totals.skipped;
+    
+    // Store HTML for combined summary
+    const updatedHtml = HtmlResultParser.updateScreenshotPaths(htmlContent, governanceType);
+    allSummaries.push(`<h2>Results for governance: ${governanceType}</h2>\n` + updatedHtml);
+  }
+
+  private async generateCombinedSummary(
+    resultsByGov: Record<string, Record<string, { result: string, runTime: string, screenshot: string }>>,
+    allTestNames: Set<string>,
+    wallClockStart: number,
+    stats: any,
+    allSummaries: string[],
+    baseUrl: string
+  ): Promise<void> {
+    await generateCombinedSummary(
+      resultsByGov,
+      allTestNames,
+      wallClockStart,
+      stats.firstTimestamp,
+      stats.totalPassed,
+      stats.totalCount,
+      stats.totalFailed,
+      stats.totalCrashed,
+      stats.totalSkipped,
+      stats.totalDuration,
+      RESULTS_DIR,
+      allSummaries,
+      baseUrl
+    );
+  }
+}
+
+// Main execution
+async function main(): Promise<void> {
+  const argParser = new ArgumentParser();
+  const args = argParser.parse();
+  
+  EnvironmentManager.setupEnvironmentVariables(args);
+  
+  switch (args.mode) {
+    case 'single-file':
+      const singleFileRunner = new SingleFileRunner(args, argParser);
+      await singleFileRunner.run();
+      break;
+      
+    case 'all-governance':
+      const allGovernanceRunner = new AllGovernanceRunner(args);
+      await allGovernanceRunner.run();
+      break;
+      
+    case 'single-governance':
+      const singleGovernanceRunner = new SingleGovernanceRunner(args);
+      await singleGovernanceRunner.run();
+      break;
+  }
+}
+
+// Execute main function
+main().catch(error => {
+  console.error('Unexpected error:', error);
+  process.exit(1);
+});
