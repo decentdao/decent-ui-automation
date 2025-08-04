@@ -362,9 +362,14 @@ export async function generateCombinedSummary(
   const baseUrlLine = baseUrl ? `**Base URL:** ${baseUrl}  \n` : '';
   const mdSummaryStats = `${baseUrlLine}**Summary:** ${mdTotalPassed}/${mdTotalCount} tests passed | Total runtime: ${wallClockRunTimeStr}\n\n`;
   
+  // Add conditional status message
+  const testStatusMessage = (mdTotalPassed / mdTotalCount) === 1 ? '✅ **All tests are passing!** ✅' : '❌ **Some tests did not pass!** ❌';
+  
   // Build markdown
   let combinedMd = `# 🧪 UI Automation Test Results\n\n**Start Timestamp:** ${firstTimestamp}  \n`;
   combinedMd += mdSummaryStats;
+  combinedMd += `${testStatusMessage}\n\n`;
+
   combinedMd += `> 📸 Download all screenshots from the workflow artifacts above. \nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
 
   combinedMd += `<details>`
