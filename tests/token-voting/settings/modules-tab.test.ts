@@ -18,7 +18,7 @@ BaseSeleniumTest.run(async (test) => {
   const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   await manageBtn.click();
   // Click on the 'Modules and Guards' tab
-  const modulesTab = await test.waitForElement(By.xpath("//p[text()='Modules and Guards']"));
+  const modulesTab = await test.waitForElement(By.css('[data-testid="settings-nav-modules"]'));
   await modulesTab.click();
   // Wait for the 'Modules' paragraph (exact text match)
   await test.waitForElement(By.xpath("//p[text()='Modules']"));

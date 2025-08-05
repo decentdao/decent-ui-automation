@@ -17,11 +17,10 @@ BaseSeleniumTest.run(async (test) => {
   // Click the 'Manage DAO' button
   const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
   await manageBtn.click();
-  
- // Click on the 'Governance' tab using JavaScript to bypass click interception
- const governanceTab = await test.waitForElement(By.xpath("//p[text()='Governance']"));
- await test.driver!.executeScript("arguments[0].click();", governanceTab);
- // Wait for the chakra form label element to confirm tab loaded
- await test.waitForElement(By.css('[class*="chakra-form__label"]'), { extra: 5000 });
- console.log('Governance tab clicked and form label element found.');
+  // Click on the 'Governance' tab
+  const governanceTab = await test.waitForElement(By.css('[data-testid="settings-nav-governance"]'));
+  await governanceTab.click();
+  // Wait for the chakra form label element to confirm tab loaded
+  await test.waitForElement(By.css('[class*="chakra-form__label"]'), { extra: 5000 });
+  console.log('Governance tab clicked and form label element found.');
 }, test);
