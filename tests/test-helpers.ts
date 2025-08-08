@@ -1,5 +1,6 @@
 import { environments, getEnvironmentUrl, initializeReleaseUrl } from '../config/environments';
 import { defaultElementWaitTime } from '../config/test-settings';
+import { WebDriver } from 'selenium-webdriver';
 
 export function getEnv() {
   return process.env.TEST_ENV || 'develop';
@@ -64,4 +65,20 @@ export function appendFlagsToUrl(url: string): string {
   const paramStr = urlParams.toString();
   const finalUrl = paramStr ? `${base}?${paramStr}` : base;
   return finalUrl;
+}
+
+// Scroll an open dropdown/listbox menu (not the page) to the bottom so far options become visible
+export async function scrollOpenDropdownToBottom(driver: WebDriver): Promise<boolean> {
+  // Small delay to allow the menu to render
+  await driver.sleep(300);
+  const didScroll = await driver.executeScript(`
+    const candidates = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], [id^="menu-list-"], [id^="headlessui-menu-items-"]'));
+    const panel = candidates.find(el => el && el.offsetParent !== null && el.scrollHeight > el.clientHeight);
+    if (panel) {
+      panel.scrollTop = panel.scrollHeight;
+      return true;
+    }
+    return false;
+  `);
+  return Boolean(didScroll);
 }

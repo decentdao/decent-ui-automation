@@ -16,7 +16,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   const proposalTemplatesPath = `${pages['proposal-templates']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + proposalTemplatesPath));
-  // Confirm the paragraph with text "Airdrop" is present
-  await test.waitForElement(By.xpath("//p[contains(text(), 'Airdrop')]"));
+  // Confirm the Airdrop example template card is present via test id
+  await test.waitForElement(By.css('[data-testid="proposalTemplates-airdrop"]'));
   console.log('Proposal Templates page loaded and "Airdrop" paragraph found.');
 }, test);

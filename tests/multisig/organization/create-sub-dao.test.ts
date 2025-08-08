@@ -11,7 +11,7 @@ BaseSeleniumTest.run(async (test) => {
   const orgPath = `${pages['organization']}?dao=${getTestDao('multisig').value}&demo_mode=on`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + orgPath));
   // Wait for the Create SubDAO button and click it
-  const createBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create SubDAO')]"));
+  const createBtn = await test.waitForElement(By.css('[data-testid="organization-createSubDAO"]'));
   await createBtn.click();
   // Wait for the input with data-testid="essentials-daoName"
   await test.waitForElement(By.css('input[data-testid="essentials-daoName"]'));
