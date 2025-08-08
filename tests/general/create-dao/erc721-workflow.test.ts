@@ -1,6 +1,6 @@
 import { BaseSeleniumTest } from '../../base-selenium-test';
 import { By } from 'selenium-webdriver';
-import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
+import { getBaseUrl, appendFlagsToUrl, scrollOpenDropdownToBottom } from '../../test-helpers';
 import { pages } from '../../../config/pages';
 
 const test = new BaseSeleniumTest('create-dao', 'erc721-workflow');
@@ -17,6 +17,8 @@ BaseSeleniumTest.run(async (test) => {
   // Open the network dropdown menu
   const networkDropdown = await test.waitForElement(By.css('#menu-button-\\:r9\\:'));
   await networkDropdown.click();
+  // Scroll the dropdown menu itself to the bottom so the target option is visible
+  await scrollOpenDropdownToBottom(test.driver!);
   
   // Select Sepolia network
   const sepoliaOption = await test.waitForElement(By.css('button[data-index="4"]'));
