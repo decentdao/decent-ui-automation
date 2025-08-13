@@ -19,7 +19,7 @@ BaseSeleniumTest.run(async (test) => {
   // Wait briefly for menu to open
   await test.driver!.sleep(500);
   // Click the transfer option via stable test id
-  const transferBtn = await test.waitForElement(By.css('[data-testid="optionMenu-transfer"]'));
+  const transferBtn = await test.waitForElement(By.css('[data-testid="optionMenu-Transfer"]'));
   await transferBtn.click();
   // Wait for the input field for ETH address
   await test.waitForElement(By.css('input#searchButActuallyEthAddress'));
