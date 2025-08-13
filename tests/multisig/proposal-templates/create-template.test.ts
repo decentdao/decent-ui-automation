@@ -11,8 +11,8 @@ BaseSeleniumTest.run(async (test) => {
   const proposalTemplatesPath = `${pages['proposal-templates']}?dao=${getTestDao('multisig').value}&demo_mode=on`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + proposalTemplatesPath));
   
-  // Click a button that has a link starting with /proposal-templates/new
-  const createButton = await test.waitForElement(By.css('a[href^="/proposal-templates/new"]'));
+  // Click the Create Template link via test id
+  const createButton = await test.waitForElement(By.css('[data-testid="proposalTemplates-create"]'));
   await createButton.click();
   
   // Confirm the metadata title input is present

@@ -14,11 +14,11 @@ BaseSeleniumTest.run(async (test) => {
   // Load the roles page
   const rolesPath = `${pages['roles']}?dao=${getTestDao(governanceType).value}&demo_mode=on`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + rolesPath));
-  // Click the button with text "Edit Roles"
-  const editRolesBtn = await test.waitForElement(By.xpath("//button[contains(., 'Edit Roles')]"));
+  // Click the Edit Roles button via stable test id
+  const editRolesBtn = await test.waitForElement(By.css('[data-testid="roles-editRoles"]'));
   await editRolesBtn.click();
-  // Click the button with text "Add Role"
-  const addRoleBtn = await test.waitForElement(By.xpath("//button[contains(., 'Add Role')]"));
+  // Click the Add Role button via stable test id
+  const addRoleBtn = await test.waitForElement(By.css('[data-testid="roles-addRole"]'));
   await addRoleBtn.click();
   // Wait for the input with data-testid="role-name"
   await test.waitForElement(By.css('input[data-testid="role-name"]'));

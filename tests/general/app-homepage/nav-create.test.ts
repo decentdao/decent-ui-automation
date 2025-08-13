@@ -8,8 +8,8 @@ BaseSeleniumTest.run(async (test) => {
   await test.start();
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pages['app-homepage']));
   
-  // Find and click the "Create DAO" navigation link
-  const createDaoLink = await test.waitForElement(By.xpath("//*[contains(text(), 'Create DAO')]"));
+  // Find and click the "Create DAO" navigation link via test id
+  const createDaoLink = await test.waitForElement(By.css('[data-testid="homepage-createDAO"]'));
   await createDaoLink.click();
   
   // Assert that the DAO name input is present on the create page

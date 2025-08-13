@@ -16,7 +16,7 @@ BaseSeleniumTest.run(async (test) => {
   // Click on the 'Modules and Guards' tab
   const modulesTab = await test.waitForElement(By.css("[data-testid='settings-nav-modules']"));
   await modulesTab.click();
-  // Wait for the 'Modules' paragraph (exact text match)
-  await test.waitForElement(By.xpath("//p[text()='Modules']"));
+  // Wait for the 'Modules' section title via test id
+  await test.waitForElement(By.css('[data-testid="settings-modules-title"]'));
   console.log('Modules and Guards tab opened and "Modules" paragraph found.');
 }, test);
