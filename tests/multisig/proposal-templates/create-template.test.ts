@@ -14,8 +14,8 @@ BaseSeleniumTest.run(async (test) => {
   // Click the Create Template link via test id
   const createButton = await test.waitForElement(By.css('[data-testid="proposalTemplates-create"]'));
   await createButton.click();
-  
-  // Confirm the metadata title input is present
-  await test.waitForElement(By.css('[data-testid="metadata.title"]'));
-  console.log('Create template page loaded and metadata title field found.');
+
+  // Confirm the transaction target address input is present
+  await test.waitForElement(By.css('[data-testid="transaction.targetAddress"]'));
+  console.log('Create template page loaded and transaction target address field found.');
 }, test);
