@@ -4,3 +4,6 @@ export const maxConcurrency = 5;
 // Default timeout for waiting for elements (in milliseconds). Can be adjusted to address general test flakiness.
 // Waits that require extra time on top of this should use the `extra` option in wait methods. Shorter wait times can be specified with absolute value parameter.
 export const defaultElementWaitTime = 10000;
+
+// Default wallet address for tests that require wallet impersonation
+export const defaultWalletAddress = "0xAf3ee09F37ead9F28a05AeF0d09841BC9A6Fe8e9";
