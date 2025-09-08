@@ -13,7 +13,7 @@ BaseSeleniumTest.run(async (test) => {
   // Open the dApp Explorer modal (needs extra time to load)
   const createProposalBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create Proposal')]"), { extra: 5000 });
   await createProposalBtn.click();
-  const useDappsOption = await test.waitForElement(By.css('[data-testid="optionMenu-Use dApps"]'));
+  const useDappsOption = await test.waitForElement(By.css('[data-testid="optionMenu-useDapps"]'));
   // Add a short delay to improve reliability
   await test.driver!.sleep(500);
   await useDappsOption.click();

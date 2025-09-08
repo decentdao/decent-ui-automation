@@ -555,7 +555,29 @@ class SingleGovernanceRunner {
 
   private discoverTests(): string[] {
     const testRoot = this.getTestRoot();
-    return FileSystemManager.findTestFiles(testRoot);
+    const allTestFiles = FileSystemManager.findTestFiles(testRoot);
+    
+    // Filter out tests that don't match the current governance type
+    return allTestFiles.filter(testFile => this.isTestCompatibleWithGovernance(testFile));
+  }
+
+  private isTestCompatibleWithGovernance(testFilePath: string): boolean {
+    try {
+      const content = fs.readFileSync(testFilePath, 'utf8');
+      
+      // Check if the test has @governance JSDoc annotation
+      const govMatch = content.match(/@governance\s+(\w+)/);
+      if (govMatch) {
+        const requiredType = govMatch[1].toLowerCase();
+        return this.args.governanceType === requiredType;
+      }
+      
+      // If no governance requirement found, test is compatible with all governance types
+      return true;
+    } catch (error) {
+      // If we can't read the file, assume it's compatible
+      return true;
+    }
   }
 
   private getTestRoot(): string {
