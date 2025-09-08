@@ -9,14 +9,14 @@ BaseSeleniumTest.run(async (test) => {
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pages['app-homepage']));
   
   // Open the language dropdown menu
-  const languageDropdown = await test.waitForElement(By.xpath("//button[contains(., 'Language')]"));
+    const languageDropdown = await test.waitForElement(By.css('[data-testid="navigation-language"]'));
   await languageDropdown.click();
   
   // Wait for dropdown to open
   await test.driver!.sleep(500);
   
   // Select German language option
-  const deutschOption = await test.waitForElement(By.xpath("//p[contains(text(), 'Deutsch (DE)')]"));
+    const deutschOption = await test.waitForElement(By.css('[data-testid="optionMenu-de"]'));
   await deutschOption.click();
   
   // Wait for page to reload/update with German language

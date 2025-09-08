@@ -17,7 +17,7 @@ BaseSeleniumTest.run(async (test) => {
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}&demo_mode=on`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   // Open the dApp Explorer modal (needs extra time to load)
-  const createProposalBtn = await test.waitForElement(By.xpath("//button[contains(., 'Create Proposal')]"), { extra: 5000 });
+  const createProposalBtn = await test.waitForElement(By.css('[data-testid="desktop-createProposal"]'), { extra: 5000 });
   await createProposalBtn.click();
   const useDappsOption = await test.waitForElement(By.css('[data-testid="optionMenu-useDapps"]'));
     // Add a short delay to improve reliability

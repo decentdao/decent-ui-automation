@@ -11,8 +11,8 @@ BaseSeleniumTest.run(async (test) => {
   // Store the original window handle
   const originalWindow = await test.driver!.getWindowHandle();
   
-  // Find and click the "Explore Docs" navigation link
-  const exploreDocsLink = await test.waitForElement(By.xpath("//*[contains(text(), 'Explore Docs')]"));
+  // Find and click the "Explore Docs" navigation link via test id
+  const exploreDocsLink = await test.waitForElement(By.css('[data-testid="homepage-exploreDocs"]'));
   await exploreDocsLink.click();
   
   // Wait for new tab to open and switch to it
