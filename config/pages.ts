@@ -7,4 +7,5 @@ export const pages = {
   'treasury': '/treasury',
   'create-proposal': '/proposals/new',
   'proposal-templates': '/proposal-templates',
+  'staking': '/staking',
 };
