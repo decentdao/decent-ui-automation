@@ -10,13 +10,12 @@ BaseSeleniumTest.run(async (test) => {
   const pagePath = `${pages['staking']}?dao=${getTestDao('multisigStaking').value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pagePath));
   
-  // NOTE: This shouldn't be necessary, but works around an issue with the tab contents showing on first load
-  await test.driver!.sleep(2000);
+  // NOTE: This shouldn't be necessary, but works around page contents not showing on first load
+  await test.driver!.sleep(5000);
   await test.driver!.navigate().refresh();
-  await test.driver!.sleep(8000);
 
-  // Wait for the input field to appear
-  const inputField = await test.driver!.findElement(By.xpath("//input[@type='text'][1]"));
+  // Wait for the input field to appear - extra wait due to the above
+  const inputField = await test.waitForElement(By.xpath("//input[@type='text'][1]"), { extra: 5000 });
   console.log('Staking page loaded and input field found.');
   
   // Enter a test value
