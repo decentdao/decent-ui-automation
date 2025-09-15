@@ -4,6 +4,11 @@ import { BaseSeleniumTest } from '../../base-selenium-test';
 import { By } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
 
+/**
+ * @governance erc20
+ * This test does not apply for erc721 DAOs at this time
+ */
+
 // Parse governance type from CLI args
 const governanceArg = process.argv.find(arg => arg.startsWith('--governance='));
 const governanceType = governanceArg ? governanceArg.split('=')[1].toLowerCase() : 'erc20';
