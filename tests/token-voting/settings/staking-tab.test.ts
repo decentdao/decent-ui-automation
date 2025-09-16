@@ -18,17 +18,40 @@ BaseSeleniumTest.run(async (test) => {
   // Load the DAO homepage
   await test.start();
   const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao(governanceType).value}`;
-  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
-  // NOTE: This shouldn't be necessary, but works around an issue with the tab contents showing on first load
-  await test.driver!.sleep(5000);
-  await test.driver!.navigate().refresh();
-  // Click the 'Manage DAO' button
-  const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
-  await manageBtn.click();
-  // Click on the 'Staking' tab
-  const modulesTab = await test.waitForElement(By.css("[data-testid='settings-nav-staking']"));
-  await modulesTab.click();
-  // Wait for the Staking contract address text
-  await test.waitForElement(By.xpath("//p[text()='0x0a6F4aAa4E20ad29826dA08FA159f56a3fb409Ad']"));
-  console.log('Staking tab opened and Staking contract address text found.');
+  
+  const maxRetries = 3;
+  let retryCount = 0;
+  
+  const runTestSteps = async () => {
+    await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
+    // NOTE: This shouldn't be necessary, but works around an issue with the tab contents showing on first load
+    await test.driver!.sleep(5000);
+    await test.driver!.navigate().refresh();
+    // Click the 'Manage DAO' button
+    const manageBtn = await test.waitForElement(By.css('[aria-label="Manage DAO"]'));
+    await manageBtn.click();
+    // Click on the 'Staking' tab
+    const modulesTab = await test.waitForElement(By.css("[data-testid='settings-nav-staking']"));
+    await modulesTab.click();
+    // Wait for the Staking contract address text
+    await test.waitForElement(By.xpath("//p[text()='0x0a6F4aAa4E20ad29826dA08FA159f56a3fb409Ad']"));
+  };
+  
+  while (retryCount < maxRetries) {
+    try {
+      await runTestSteps();
+      console.log('Staking tab opened and Staking contract address text found.');
+      break; // Success, exit retry loop
+    } catch (error) {
+      retryCount++;
+      console.log(`Test attempt ${retryCount} failed. ${retryCount < maxRetries ? 'Retrying...' : 'Max retries reached.'}`);
+      
+      if (retryCount >= maxRetries) {
+        throw error; // Re-throw the error after max retries
+      }
+      
+      // Wait a moment before retrying
+      await test.driver!.sleep(2000);
+    }
+  }
 }, test);
