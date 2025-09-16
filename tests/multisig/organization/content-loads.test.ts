@@ -14,6 +14,6 @@ BaseSeleniumTest.run(async (test) => {
   const orgPath = `${pages['organization']}?dao=${getTestDao('multisig').value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + orgPath));
   // Confirm the toggle favorite Safes button is present
-  await test.waitForElement(By.css('[aria-label="Toggle your favorite Safes."]'));
-  console.log('Organization page loaded and favorite Safes toggle button found.');
+  await test.waitForElement(By.css('[aria-label*="Toggle your favorite"]'));
+  console.log('Organization page loaded and favorite toggle button found.');
 }, test);
