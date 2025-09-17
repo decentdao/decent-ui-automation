@@ -117,6 +117,13 @@ export class BaseSeleniumTest {
     options.addArguments('--disable-features=TranslateUI,BlinkGenPropertyTrees');
     options.addArguments('--disable-ipc-flooding-protection');
     
+    // Preserve origin for API calls while allowing cross-origin requests
+    options.addArguments('--disable-features=VizDisplayCompositor');
+    options.addArguments('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Enable software WebGL to suppress deprecation warnings
+    options.addArguments('--enable-unsafe-swiftshader');
+    
     // Use custom user data directory
     options.addArguments(`--user-data-dir=${customTempDir}`);
     
