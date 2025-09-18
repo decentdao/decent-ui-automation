@@ -54,10 +54,26 @@ export class DebugConfigManager {
    * Check if debug mode is enabled via CLI argument or environment variable
    * Handles npm's conversion of --debug-mode to --debug_mode and npm_config_debug_mode
    */
+  /**
+   * Helper to check if a CLI argument (hyphen/underscore variants) or its npm config env var is set to true
+   */
+  private isCliArgOrNpmConfigTrue(argName: string): boolean {
+    const hyphenArg = argName;
+    const underscoreArg = argName.replace(/-/g, '_');
+    const npmConfigVar = this.getNpmConfigVarName(argName);
+    // Check CLI args
+    if (process.argv.includes(hyphenArg) || process.argv.includes(underscoreArg)) {
+      return true;
+    }
+    // Check npm config env var
+    if (process.env[npmConfigVar] === 'true') {
+      return true;
+    }
+    return false;
+  }
+
   private isDebugModeEnabled(): boolean {
-    return process.argv.includes('--debug-mode') || 
-           process.argv.includes('--debug_mode') ||
-           process.env.npm_config_debug_mode === 'true';
+    return this.isCliArgOrNpmConfigTrue('--debug-mode');
   }
 
   /**
