@@ -122,7 +122,8 @@ export class DebugHelper {
       
       // Gather detailed information about found elements
       const elementDetails = await Promise.all(
-        elements.slice(0, MAX_ELEMENTS_TO_ANALYZE).map(async (el, i) => { // Limit to first elements for analysis
+        // Limit to first MAX_ELEMENTS_TO_ANALYZE (10) elements for performance
+        elements.slice(0, MAX_ELEMENTS_TO_ANALYZE).map(async (el, i) => {
           try {
             const tagName = await el.getTagName();
             const text = await el.getText();
