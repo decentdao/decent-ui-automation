@@ -12,7 +12,12 @@
     "test:multisig": "ts-node src/run-tests.ts --governance=multisig",
     "test:production": "ts-node src/run-tests.ts --env=production",
     "test:release": "ts-node src/run-tests.ts --env=release",
-    "test:debug": "ts-node src/run-tests.ts --debug"
+    "test:debug": "ts-node src/run-tests.ts --debug",
+    "test:debug-mode": "ts-node src/run-tests.ts --debug-mode",
+    "test:debug-verbose": "ts-node src/run-tests.ts --debug-mode --debug-level=verbose",
+    "test:debug-erc20": "ts-node src/run-tests.ts --governance=erc20 --debug-mode",
+    "test:debug-multisig": "ts-node src/run-tests.ts --governance=multisig --debug-mode",
+    "test:debug-single": "ts-node src/run-tests.ts --single --debug-mode"
   },
   "dependencies": {
     "selenium-webdriver": "^4.0.0"

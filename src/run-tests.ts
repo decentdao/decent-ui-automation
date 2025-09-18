@@ -24,7 +24,8 @@ type ParsedArgs = {
   environment: string;
   baseUrl?: string;
   flags?: string;
-  debugMode: boolean;
+  runnerDebug: boolean; // --debug flag: limits to 5 tests, controls output
+  debugToolset: boolean; // --debug-mode flag: enables debug toolset features  
   isChildProcess: boolean;
 };
 
@@ -40,7 +41,8 @@ class ArgumentParser {
     const fileArg = this.argv.find(arg => arg.startsWith('--file='));
     const governanceArg = this.argv.find(arg => arg.startsWith('--governance='));
     const testFileArgs = this.argv.filter(arg => arg.endsWith('.test.ts'));
-    const debugMode = this.argv.some(arg => arg === '--debug' || arg === 'debug');
+    const runnerDebug = this.argv.some(arg => arg === '--debug' || arg === 'debug');
+    const debugToolset = this.argv.some(arg => arg === '--debug-mode');
     const isChildProcess = this.argv.some(arg => arg.startsWith('--governance='));
 
     // Determine execution mode
@@ -66,7 +68,8 @@ class ArgumentParser {
       environment: this.parseEnvironment(),
       baseUrl: this.parseBaseUrl(),
       flags: this.parseFlags(),
-      debugMode,
+      runnerDebug,
+      debugToolset,
       isChildProcess
     };
   }
@@ -348,7 +351,7 @@ class TestFilter {
         : allTests;
     }
 
-    if (args.debugMode) {
+    if (args.runnerDebug) {
       filteredTests = filteredTests.slice(0, 5);
     }
 
@@ -630,7 +633,7 @@ class SingleGovernanceRunner {
         proc.stdout.on('data', (data) => {
           const str = data.toString();
           output += str;
-          if (!this.args.debugMode) process.stdout.write(str);
+          if (!this.args.runnerDebug) process.stdout.write(str);
         });
       }
       
@@ -638,7 +641,7 @@ class SingleGovernanceRunner {
         proc.stderr.on('data', (data) => {
           const str = data.toString();
           error += str;
-          if (!this.args.debugMode) process.stderr.write(str);
+          if (!this.args.runnerDebug) process.stderr.write(str);
         });
       }
       
@@ -651,7 +654,7 @@ class SingleGovernanceRunner {
         
         this.logTestResult(testName, passed, crashed);
         
-        if (this.args.debugMode) {
+        if (this.args.runnerDebug) {
           this.logDebugOutput(testName, output, error);
         }
         
@@ -830,7 +833,7 @@ class AllGovernanceRunner {
   ): Promise<void> {
     return new Promise((resolve) => {
       const args = ['src/run-tests.ts', `--governance=${governanceType}`];
-      if (this.args.debugMode) args.push('--debug');
+      if (this.args.runnerDebug) args.push('--debug');
       
       const proc = spawn('npx', ['ts-node', ...args], {
         stdio: 'inherit',
