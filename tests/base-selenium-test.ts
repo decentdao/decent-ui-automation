@@ -3,6 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { defaultElementWaitTime } from './test-helpers';
+import { DebugConfigManager, DebugConfig } from '../src/debug/debug-config';
+import { DebugLogger } from '../src/debug/debug-logger';
+import { DebugHelper } from '../src/debug/debug-helper';
 
 export class BaseSeleniumTest {
   pageName: string;
@@ -11,6 +14,11 @@ export class BaseSeleniumTest {
   screenshotDir: string;
   screenshotPath?: string;
   private tempDirs: string[] = [];
+  
+  // Debug functionality
+  private debugConfig: DebugConfig;
+  private debugLogger?: DebugLogger;
+  public debugHelper?: DebugHelper;
 
   constructor(pageName: string, screenshotName?: string) {
     this.pageName = pageName;
@@ -26,6 +34,14 @@ export class BaseSeleniumTest {
     }
     if (!fs.existsSync(this.screenshotDir)) fs.mkdirSync(this.screenshotDir, { recursive: true });
     this.screenshotPath = undefined;
+
+    // Initialize debug functionality
+    this.debugConfig = DebugConfigManager.getInstance().getConfig();
+    
+    if (this.debugConfig.enabled) {
+      this.debugLogger = new DebugLogger(pageName);
+      console.log(`[DEBUG] Debug mode enabled for test: ${pageName}`);
+    }
   }
 
   getScreenshotName(): string {
@@ -153,10 +169,24 @@ export class BaseSeleniumTest {
     
     // Set explicit window size in both headed and headless modes for consistency
     await this.driver.manage().window().setRect({ width: 1920, height: 1400 });
+
+    // Initialize debug helper and log test start
+    if (this.debugConfig.enabled) {
+      this.debugHelper = new DebugHelper(this.driver, this.debugLogger!);
+      await this.debugLog('test_start', { action: 'Browser started', success: true });
+    }
   }
 
   async saveScreenshot(timeoutMs = 10000) {
     if (this.driver) {
+      // Check if browser session is still alive before attempting screenshot
+      try {
+        await this.driver.getCurrentUrl();
+      } catch (sessionError) {
+        console.warn('[BaseSeleniumTest] Browser session not available for screenshot, skipping');
+        return;
+      }
+      
       const screenshotPath = path.join(this.screenshotDir, `${this.getScreenshotName()}.png`);
       const screenshotDir = path.dirname(screenshotPath);
       if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true });
@@ -282,6 +312,25 @@ export class BaseSeleniumTest {
       
       // Do not call process.exit here; let the test runner handle process exit
     }
+
+    // Save debug report if debug mode is enabled
+    if (this.debugConfig.enabled) {
+      await this.debugLog('test_end', { 
+        action: 'Test finished', 
+        success: testPassed,
+        screenshot: testPassed ? undefined : await this.captureDebugScreenshot('test_end')
+      });
+      await this.debugLogger?.saveDebugReport();
+      
+      // If test failed, provide guidance about AI analysis
+      if (!testPassed) {
+        console.log('');
+        console.log('🤖 [AI ANALYSIS] Test failed - AI-ready analysis request generated!');
+        console.log(`📁 Check: ${this.debugLogger?.debugDir}/ai-analysis-request.md`);
+        console.log('💡 Copy the contents of ai-analysis-request.md to your AI assistant for detailed failure analysis');
+        console.log('');
+      }
+    }
   }
 
   /**
@@ -311,13 +360,53 @@ export class BaseSeleniumTest {
       actualTimeout = timeout as number;
     }
     
-    return await this.driver.wait(until.elementLocated(locator), actualTimeout);
+    const startTime = Date.now();
+    let success = false;
+    let error: string | undefined;
+    
+    try {
+      const element = await this.driver.wait(until.elementLocated(locator), actualTimeout);
+      success = true;
+      return element;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      throw e;
+    } finally {
+      if (this.debugConfig.enabled) {
+        await this.debugLog('wait_for_element', {
+          element: this.locatorToString(locator),
+          duration: Date.now() - startTime,
+          success,
+          error
+        });
+      }
+    }
   }
 
   async clickElement(locator: Locator, timeout: number | { extra: number } = defaultElementWaitTime): Promise<WebElement> {
-    const el = await this.waitForElement(locator, timeout);
-    await el.click();
-    return el;
+    const startTime = Date.now();
+    let success = false;
+    let error: string | undefined;
+    
+    try {
+      const el = await this.waitForElement(locator, timeout);
+      await el.click();
+      success = true;
+      return el;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      throw e;
+    } finally {
+      if (this.debugConfig.enabled) {
+        await this.debugLog('click_element', {
+          element: this.locatorToString(locator),
+          duration: Date.now() - startTime,
+          success,
+          error,
+          screenshot: success ? undefined : await this.captureDebugScreenshot('click_failure')
+        });
+      }
+    }
   }
 
   async getElementText(locator: Locator, timeout: number | { extra: number } = defaultElementWaitTime): Promise<string> {
@@ -335,11 +424,32 @@ export class BaseSeleniumTest {
    */
   async handleError(e: any) {
     const tmpErrorPath = path.join(os.tmpdir(), `selenium-test-error-${process.pid}.log`);
+    
+    // Log debug information about the error before finish
+    if (this.debugConfig.enabled) {
+      await this.debugLog('test_error', { 
+        action: 'Test failed with error', 
+        success: false,
+        error: e instanceof Error ? e.message : String(e),
+        screenshot: await this.captureDebugScreenshot('error')
+      });
+    }
+    
     try {
       await this.finish(false); // Ensure browser closes and screenshot is saved
     } catch (teardownErr) {
       console.error('[BaseSeleniumTest] Error during finish in handleError:', teardownErr);
     }
+    
+    // Additional AI analysis feedback after finish() which generates the report
+    if (this.debugConfig.enabled) {
+      console.log('');
+      console.log('🤖 [AI ANALYSIS] Error detected - AI analysis request generated!');
+      console.log(`📁 Check: ${this.debugLogger?.debugDir}/ai-analysis-request.md`);
+      console.log('💡 Copy the contents to your AI assistant for immediate error analysis');
+      console.log('');
+    }
+    
     // Print error stack or message
     let errorText = '';
     if (e instanceof Error) {
@@ -381,6 +491,36 @@ export class BaseSeleniumTest {
     } catch (teardownErr) {
       console.error('[BaseSeleniumTest] Error during teardown in finishAndExit:', teardownErr);
       process.exit(testPassed ? 0 : 1);
+    }
+  }
+
+  // Debug helper methods
+  private async debugLog(action: string, context: any): Promise<void> {
+    if (this.debugLogger) {
+      this.debugLogger.log({ action, ...context });
+    }
+  }
+
+  private async captureDebugScreenshot(suffix: string): Promise<string | undefined> {
+    if (this.debugConfig.enabled && this.debugConfig.captureScreenshots && this.driver) {
+      try {
+        const screenshotPath = path.join(this.debugLogger!.debugDir, `${suffix}_${Date.now()}.png`);
+        const data = await this.driver.takeScreenshot();
+        fs.writeFileSync(screenshotPath, data, 'base64');
+        return screenshotPath;
+      } catch (e) {
+        console.warn('[DEBUG] Failed to capture debug screenshot:', e instanceof Error ? e.message : String(e));
+      }
+    }
+    return undefined;
+  }
+
+  private locatorToString(locator: Locator): string {
+    // For Selenium 4+, locators are functions, so we need to extract info differently
+    try {
+      return locator.toString();
+    } catch {
+      return 'unknown-locator';
     }
   }
 }

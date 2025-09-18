@@ -35,12 +35,12 @@ BaseSeleniumTest.run(async (test) => {
   // Enter NFT token address
   const tokenAddressInput = await test.waitForElement(By.css('[data-testid="erc721Token.nfts.0.tokenAddressInput"]'));
   await tokenAddressInput.sendKeys('0x31408f226E37FBF8715CA6eE45aaB4Ea213bA7A5');
-  await test.driver!.sleep(1000);
+  await test.driver!.sleep(2000);
   
   // Enter NFT token weight
   const tokenWeightInput = await test.waitForElement(By.css('[data-testid="erc721Token.nfts.0.tokenWeightInput"]'));
-  await tokenWeightInput.sendKeys('1');
-  await test.driver!.sleep(1000);
+  await tokenWeightInput.sendKeys('2');
+  await test.driver!.sleep(2000);
 
   // Click skip next button and wait for next page with retry logic
   const maxRetries = 3;
