@@ -3,6 +3,10 @@ import { DebugLogger } from './debug-logger';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Configuration constants for debugging behavior
+const MAX_ELEMENTS_TO_ANALYZE = 10;
+const LOG_ATTEMPT_INTERVAL = 5;
+
 /**
  * Advanced debugging utilities for Selenium tests.
  * Provides DOM snapshots, page state logging, and element analysis.
@@ -118,7 +122,7 @@ export class DebugHelper {
       
       // Gather detailed information about found elements
       const elementDetails = await Promise.all(
-        elements.slice(0, 10).map(async (el, i) => { // Limit to first 10 elements
+        elements.slice(0, MAX_ELEMENTS_TO_ANALYZE).map(async (el, i) => { // Limit to first elements for analysis
           try {
             const tagName = await el.getTagName();
             const text = await el.getText();
@@ -228,7 +232,7 @@ export class DebugHelper {
           return element;
         } else {
           // Log attempt details
-          if (attempts % 5 === 0) { // Log every 5th attempt to avoid spam
+          if (attempts % LOG_ATTEMPT_INTERVAL === 0) { // Log at regular intervals to avoid spam
             await this.logPageState(`wait_attempt_${attempts}`);
             
             this.logger.log({

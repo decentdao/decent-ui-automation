@@ -47,6 +47,9 @@ export class DebugLogger {
     const baseDebugDir = path.join(process.cwd(), 'test-results', 'debug-logs');
     this.debugDir = path.join(baseDebugDir, testName);
     
+    // Clean up existing debug files from previous runs
+    this.cleanDebugDirectory();
+    
     if (!fs.existsSync(this.debugDir)) {
       fs.mkdirSync(this.debugDir, { recursive: true });
     }
@@ -54,6 +57,31 @@ export class DebugLogger {
     this.startTime = new Date();
     console.log(`[DEBUG] Debug logging initialized for test: ${testName}`);
     console.log(`[DEBUG] Debug files will be saved to: ${this.debugDir}`);
+  }
+
+  /**
+   * Clean up debug directory from previous runs to avoid stale files
+   */
+  private cleanDebugDirectory(): void {
+    if (fs.existsSync(this.debugDir)) {
+      try {
+        // Get all files in the debug directory
+        const files = fs.readdirSync(this.debugDir);
+        
+        for (const file of files) {
+          const filePath = path.join(this.debugDir, file);
+          const stat = fs.statSync(filePath);
+          
+          if (stat.isFile()) {
+            fs.unlinkSync(filePath);
+          }
+        }
+        
+        console.log(`[DEBUG] Cleaned ${files.length} files from previous debug run`);
+      } catch (error) {
+        console.warn(`[DEBUG] Failed to clean debug directory: ${error}`);
+      }
+    }
   }
 
   /**
@@ -197,7 +225,47 @@ export class DebugLogger {
     const failureIndex = this.logEntries.indexOf(failure);
     const testDuration = this.startTime ? new Date().getTime() - this.startTime.getTime() : 0;
 
-    let markdown = `# Test Failure Analysis Request
+    // Pre-compute JSON stringifications to avoid repeated operations
+    const failureContext = failure.context ? JSON.stringify(failure.context, null, 2) : 'None';
+    
+    // Pre-compute context log entries
+    const contextLogEntries = context.map((entry, index) => {
+      const prefix = entry === failure ? '❌ FAILURE →' : `${index + 1}.`;
+      const contextStr = entry.context ? ` | CONTEXT: ${JSON.stringify(entry.context)}` : '';
+      const errorStr = entry.error ? ` | ERROR: ${entry.error}` : '';
+      return `${prefix} [${entry.timestamp}] ACTION: ${entry.action} | SUCCESS: ${entry.success} | ELEMENT: ${entry.element || 'N/A'} | DURATION: ${entry.duration || 0}ms${errorStr}${contextStr}`;
+    }).join('\n');
+
+    // Pre-compute debug artifacts section
+    const debugArtifacts = [
+      failure.screenshot ? `- **Screenshot:** ${path.basename(failure.screenshot)}` : null,
+      failure.domSnapshot ? `- **DOM Snapshot:** ${path.basename(failure.domSnapshot)}` : null,
+      '- **Full Debug Log:** debug.log',
+      '- **Debug Report:** debug-report.json',
+      '- **Debug Summary:** debug-summary.md'
+    ].filter(Boolean).join('\n');
+
+    // Pre-compute multiple failures section if needed
+    const multipleFailuresSection = allFailures.length > 1 
+      ? `## Multiple Failures Detected (${allFailures.length} total)
+${allFailures.map((f, i) => `${i + 1}. **${f.action}** at ${f.timestamp} - ${f.error || 'Unknown error'}`).join('\n')}
+
+`
+      : '';
+
+    // Pre-compute performance issue section if needed
+    const performanceIssueSection = failure.duration && failure.duration > 5000
+      ? `## ⚠️ Performance Issue Detected
+This action took ${failure.duration}ms, which is unusually long and may indicate:
+- Network connectivity issues
+- Element loading problems
+- Timing/synchronization issues
+
+`
+      : '';
+
+    // Build the complete markdown using a single template literal
+    return `# Test Failure Analysis Request
 
 ## Test Information
 - **Test Name:** ${this.testName}
@@ -212,45 +280,17 @@ export class DebugLogger {
 ## Primary Failure Details
 - **Duration:** ${failure.duration || 0}ms
 - **Success:** ${failure.success}
-- **Context:** ${failure.context ? JSON.stringify(failure.context, null, 2) : 'None'}
+- **Context:** ${failureContext}
 
 ## Debug Log Context (Last 4 Actions Leading to Failure)
 \`\`\`
-${context.map((entry, index) => {
-  const prefix = entry === failure ? '❌ FAILURE →' : `${index + 1}.`;
-  return `${prefix} [${entry.timestamp}] ACTION: ${entry.action} | SUCCESS: ${entry.success} | ELEMENT: ${entry.element || 'N/A'} | DURATION: ${entry.duration || 0}ms${entry.error ? ` | ERROR: ${entry.error}` : ''}${entry.context ? ` | CONTEXT: ${JSON.stringify(entry.context)}` : ''}`;
-}).join('\n')}
+${contextLogEntries}
 \`\`\`
 
 ## Available Debug Artifacts
-${failure.screenshot ? `- **Screenshot:** ${path.basename(failure.screenshot)}` : ''}
-${failure.domSnapshot ? `- **DOM Snapshot:** ${path.basename(failure.domSnapshot)}` : ''}
-- **Full Debug Log:** debug.log
-- **Debug Report:** debug-report.json
-- **Debug Summary:** debug-summary.md
+${debugArtifacts}
 
-`;
-
-    // Add multiple failures analysis if applicable
-    if (allFailures.length > 1) {
-      markdown += `## Multiple Failures Detected (${allFailures.length} total)
-${allFailures.map((f, i) => `${i + 1}. **${f.action}** at ${f.timestamp} - ${f.error || 'Unknown error'}`).join('\n')}
-
-`;
-    }
-
-    // Add timing analysis
-    if (failure.duration && failure.duration > 5000) {
-      markdown += `## ⚠️ Performance Issue Detected
-This action took ${failure.duration}ms, which is unusually long and may indicate:
-- Network connectivity issues
-- Element loading problems
-- Timing/synchronization issues
-
-`;
-    }
-
-    markdown += `## Questions for AI Analysis
+${multipleFailuresSection}${performanceIssueSection}## Questions for AI Analysis
 1. **Root Cause:** What is the primary cause of this failure?
 2. **Fix Strategy:** What specific steps should I take to fix this issue?
 3. **Race Conditions:** Are there any timing issues or race conditions evident?
@@ -267,8 +307,6 @@ Please analyze the debug information above and provide:
 
 ---
 *Generated automatically by Decent UI Automation Debug Toolset*`;
-
-    return markdown;
   }
 
   /**
