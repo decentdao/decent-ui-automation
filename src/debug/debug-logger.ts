@@ -228,10 +228,11 @@ export class DebugLogger {
     // Pre-compute JSON stringifications to avoid repeated operations
     const failureContext = failure.context ? JSON.stringify(failure.context, null, 2) : 'None';
     
-    // Pre-compute context log entries
+    // Pre-compute stringified contexts for context log entries
+    const stringifiedContexts = context.map(entry => entry.context ? JSON.stringify(entry.context) : '');
     const contextLogEntries = context.map((entry, index) => {
       const prefix = entry === failure ? '❌ FAILURE →' : `${index + 1}.`;
-      const contextStr = entry.context ? ` | CONTEXT: ${JSON.stringify(entry.context)}` : '';
+      const contextStr = stringifiedContexts[index] ? ` | CONTEXT: ${stringifiedContexts[index]}` : '';
       const errorStr = entry.error ? ` | ERROR: ${entry.error}` : '';
       return `${prefix} [${entry.timestamp}] ACTION: ${entry.action} | SUCCESS: ${entry.success} | ELEMENT: ${entry.element || 'N/A'} | DURATION: ${entry.duration || 0}ms${errorStr}${contextStr}`;
     }).join('\n');
