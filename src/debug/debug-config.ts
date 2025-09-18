@@ -18,10 +18,7 @@ export class DebugConfigManager {
 
   private constructor() {
     // Check for debug toolset activation via --debug-mode flag
-    // npm passes --debug-mode as --debug_mode in process.argv and as npm_config_debug_mode in env
-    const isDebugEnabled = process.argv.includes('--debug-mode') || 
-                          process.argv.includes('--debug_mode') ||
-                          process.env.npm_config_debug_mode === 'true';
+    const isDebugEnabled = this.isDebugModeEnabled();
 
     this.config = {
       enabled: isDebugEnabled,
@@ -51,6 +48,36 @@ export class DebugConfigManager {
 
   isDebugEnabled(): boolean {
     return this.config.enabled;
+  }
+
+  /**
+   * Check if debug mode is enabled via CLI argument or environment variable
+   * Handles npm's conversion of --debug-mode to --debug_mode and npm_config_debug_mode
+   */
+  private isDebugModeEnabled(): boolean {
+    return process.argv.includes('--debug-mode') || 
+           process.argv.includes('--debug_mode') ||
+           process.env.npm_config_debug_mode === 'true';
+  }
+
+  /**
+   * Get npm environment variable name for a CLI argument
+   * Converts --debug-level to npm_config_debug_level format
+   */
+  private getNpmConfigVarName(argName: string): string {
+    return `npm_config_${argName.replace(/^--/, '').replace(/-/g, '_')}`;
+  }
+
+  /**
+   * Check if a CLI argument or corresponding npm environment variable is set
+   */
+  private hasCliArgOrNpmConfig(argName: string): boolean {
+    const argWithEquals = `${argName}=`;
+    const underscoreArgName = argName.replace(/-/g, '_');
+    const underscoreArgWithEquals = `${underscoreArgName}=`;
+    
+    return process.argv.some(arg => arg.startsWith(argWithEquals) || arg.startsWith(underscoreArgWithEquals)) ||
+           process.env[this.getNpmConfigVarName(argName)] !== undefined;
   }
 
   private parseLogLevel(value?: string): 'verbose' | 'detailed' | 'minimal' | undefined {
@@ -88,8 +115,7 @@ export class DebugConfigManager {
     if (arg) return arg.split('=')[1];
     
     // Try npm environment variable
-    const envVarName = `npm_config_${argName.replace(/^--/, '').replace(/-/g, '_')}`;
-    const envValue = process.env[envVarName];
+    const envValue = process.env[this.getNpmConfigVarName(argName)];
     if (envValue && envValue !== 'true' && envValue !== 'false') {
       return envValue;
     }
@@ -108,8 +134,7 @@ export class DebugConfigManager {
     }
     
     // Check npm environment variable for boolean flags
-    const envVarName = `npm_config_${argName.replace(/^--/, '').replace(/-/g, '_')}`;
-    const envValue = process.env[envVarName];
+    const envValue = process.env[this.getNpmConfigVarName(argName)];
     if (envValue !== undefined) {
       return envValue === 'true' || envValue === '';  // npm sets empty string for boolean flags
     }

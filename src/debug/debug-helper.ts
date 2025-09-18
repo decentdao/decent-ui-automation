@@ -15,12 +15,28 @@ export class DebugHelper {
   constructor(private driver: WebDriver, private logger: DebugLogger) {}
 
   /**
+   * Check if browser session is still alive
+   * Useful for preventing errors when browser has crashed or been closed
+   */
+  private async isBrowserSessionAlive(): Promise<boolean> {
+    try {
+      await this.driver.getCurrentUrl();
+      return true;
+    } catch (sessionError) {
+      return false;
+    }
+  }
+
+  /**
    * Capture a complete DOM snapshot at a specific step
    */
   async captureDomSnapshot(stepName: string): Promise<string | undefined> {
     try {
       // Check if browser session is still alive before attempting DOM capture
-      await this.driver.getCurrentUrl();
+      if (!await this.isBrowserSessionAlive()) {
+        console.warn(`[DEBUG] Browser session not available for DOM snapshot '${stepName}', skipping`);
+        return undefined;
+      }
       
       const html = await this.driver.getPageSource();
       const timestamp = Date.now();
@@ -65,7 +81,10 @@ export class DebugHelper {
   async logPageState(stepName: string): Promise<void> {
     try {
       // Check if browser session is still alive before attempting page state capture
-      await this.driver.getCurrentUrl();
+      if (!await this.isBrowserSessionAlive()) {
+        console.warn(`[DEBUG] Browser session not available for page state logging '${stepName}', skipping`);
+        return;
+      }
       
       const url = await this.driver.getCurrentUrl();
       const title = await this.driver.getTitle();

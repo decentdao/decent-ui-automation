@@ -66,6 +66,21 @@ export class BaseSeleniumTest {
   }
 
   /**
+   * Check if browser session is still alive
+   * Useful for preventing errors when browser has crashed or been closed
+   */
+  private async isBrowserSessionAlive(): Promise<boolean> {
+    if (!this.driver) return false;
+    
+    try {
+      await this.driver.getCurrentUrl();
+      return true;
+    } catch (sessionError) {
+      return false;
+    }
+  }
+
+  /**
    * Clean up Chrome temporary files and directories
    */
   private cleanupChromeTemp(): void {
@@ -180,9 +195,7 @@ export class BaseSeleniumTest {
   async saveScreenshot(timeoutMs = 10000) {
     if (this.driver) {
       // Check if browser session is still alive before attempting screenshot
-      try {
-        await this.driver.getCurrentUrl();
-      } catch (sessionError) {
+      if (!await this.isBrowserSessionAlive()) {
         console.warn('[BaseSeleniumTest] Browser session not available for screenshot, skipping');
         return;
       }
