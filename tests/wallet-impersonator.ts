@@ -131,13 +131,13 @@ async function getWalletConnectUri(driver: WebDriver, baseUrl: string): Promise<
 }
 
 /**
- * Sets up wallet impersonation in the first tab, then opens a new tab for the main test.
+ * Sets up wallet impersonation in a new tab, then switches back to the first tab for the main test.
  * This function should be called before the main test steps begin.
  * 
  * @param driver - The WebDriver instance
  * @param config - Configuration object containing wallet details
  * @param baseUrl - The base URL of the Decent app to get WalletConnect URI from
- * @returns Promise<string> - The window handle of the new tab for the main test
+ * @returns Promise<string> - The window handle of the original tab for the main test
  */
 export async function setupWalletImpersonator(
   driver: WebDriver, 
@@ -153,13 +153,21 @@ export async function setupWalletImpersonator(
   console.log(`[WalletImpersonator] Setting up wallet impersonation for ${walletAddress}`);
   
   try {
+    // Store the original tab handle (where we got the WalletConnect URI)
+    const originalTabHandle = await driver.getWindowHandle();
+    
     // Get a WalletConnect URI from the Decent app
     const walletConnectUri = await getWalletConnectUri(driver, baseUrl);
     console.log(`[WalletImpersonator] Got WalletConnect URI: ${walletConnectUri.substring(0, 50)}...`);
 
-    // Navigate to the impersonator website in the current (first) tab
-    await driver.get("https://impersonator.xyz/");
-    console.log('[WalletImpersonator] Navigated to impersonator.xyz');
+    // Open a new tab for the impersonator website
+    await driver.executeScript("window.open('https://impersonator.xyz/', '_blank');");
+    const allWindowHandles = await driver.getAllWindowHandles();
+    const impersonatorTabHandle = allWindowHandles[allWindowHandles.length - 1];
+    
+    // Switch to the impersonator tab
+    await driver.switchTo().window(impersonatorTabHandle);
+    console.log('[WalletImpersonator] Opened new tab and navigated to impersonator.xyz');
 
     // 1. Type the wallet address into the "Enter Address or ENS to Impersonate" field
     const addressInput = await findInputBelowLabel(driver, "Enter Address or ENS to Impersonate");
@@ -298,16 +306,11 @@ export async function setupWalletImpersonator(
     await waitUntilWalletConnected(driver, timeoutMs);
     console.log('[WalletImpersonator] Wallet connection completed');
 
-    // 7. Open a new tab for the main test
-    await driver.executeScript("window.open('about:blank', '_blank');");
-    const windowHandles = await driver.getAllWindowHandles();
-    const newTabHandle = windowHandles[windowHandles.length - 1];
+    // 7. Switch back to the original tab for the main test
+    await driver.switchTo().window(originalTabHandle);
+    console.log('[WalletImpersonator] Switched back to original tab for main test');
     
-    // Switch to the new tab
-    await driver.switchTo().window(newTabHandle);
-    console.log('[WalletImpersonator] Opened and switched to new tab for main test');
-    
-    return newTabHandle;
+    return originalTabHandle;
 
   } catch (error) {
     console.error('[WalletImpersonator] Setup failed:', error);
