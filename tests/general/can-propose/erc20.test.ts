@@ -19,6 +19,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
   
   // Look for the Create Proposal button
+  await test.driver?.sleep(2000);
   await test.waitForElement(By.css("[data-testid='desktop-createProposal']"));
   console.log('Create Proposal button found, isProposer check succeeded.');
   
