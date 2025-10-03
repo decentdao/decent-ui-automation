@@ -761,6 +761,8 @@ class SingleGovernanceRunner {
       skipMarkdown: !!process.env.SKIP_MARKDOWN
     });
   }
+
+
 }
 
 class AllGovernanceRunner {
@@ -804,6 +806,8 @@ class AllGovernanceRunner {
       totalCount: 0
     };
   }
+
+
 
   private async runGovernanceType(
     governanceType: GovernanceType,

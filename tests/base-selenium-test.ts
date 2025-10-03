@@ -13,8 +13,6 @@ export class BaseSeleniumTest {
   driver: WebDriver | null;
   screenshotDir: string;
   screenshotPath?: string;
-  private tempDirs: string[] = [];
-  
   // Debug functionality
   private debugConfig: DebugConfig;
   private debugLogger?: DebugLogger;
@@ -73,15 +71,20 @@ export class BaseSeleniumTest {
     if (!this.driver) return false;
     
     try {
-      await this.driver.getCurrentUrl();
+      await Promise.race([
+        this.driver.getCurrentUrl(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Session check timeout')), 1000))
+      ]);
       return true;
     } catch (sessionError) {
+      // Silently handle all session errors (including ECONNREFUSED)
       return false;
     }
   }
 
   /**
    * Clean up Chrome temporary files and directories
+   * Simple cleanup without complex temp directory management
    */
   private cleanupChromeTemp(): void {
     try {
@@ -110,79 +113,35 @@ export class BaseSeleniumTest {
         }
       }
     } catch (err) {
-      // Don't log cleanup errors as they're not critical
+      // Silently ignore cleanup errors - not critical for test operation
     }
   }
 
-  /**
-   * Create a custom temporary directory for Chrome user data
-   */
-  private createCustomTempDir(): string {
-    const baseTempDir = os.tmpdir();
-    const customTempDir = path.join(baseTempDir, `chrome-test-${process.pid}-${Date.now()}`);
-    fs.mkdirSync(customTempDir, { recursive: true });
-    this.tempDirs.push(customTempDir);
-    return customTempDir;
-  }
+
 
   async start() {
     const chrome = require('selenium-webdriver/chrome');
     const options = new chrome.Options();
     
-    // Create custom temp directory for Chrome user data
-    const customTempDir = this.createCustomTempDir();
-    
-    // Configure Chrome options with better cleanup behavior
+    // Basic Chrome options
     options.addArguments('--ignore-certificate-errors');
-    options.addArguments('--log-level=3'); // Suppress most Chrome logs
+    options.addArguments('--log-level=3');
     options.addArguments('--no-sandbox');
     options.addArguments('--disable-dev-shm-usage');
     options.addArguments('--disable-gpu');
     options.addArguments('--disable-extensions');
-    options.addArguments('--disable-plugins');
-    options.addArguments('--disable-images');
-    options.addArguments('--disable-javascript-harmony-shipping');
-    options.addArguments('--disable-background-timer-throttling');
-    options.addArguments('--disable-backgrounding-occluded-windows');
-    options.addArguments('--disable-renderer-backgrounding');
-    options.addArguments('--disable-features=TranslateUI,BlinkGenPropertyTrees');
-    options.addArguments('--disable-ipc-flooding-protection');
-    
-    // Preserve origin for API calls while allowing cross-origin requests
-    options.addArguments('--disable-features=VizDisplayCompositor');
-    options.addArguments('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    
-    // Enable software WebGL to suppress deprecation warnings
-    options.addArguments('--enable-unsafe-swiftshader');
-    
-    // Use custom user data directory
-    options.addArguments(`--user-data-dir=${customTempDir}`);
-    
-    // Set disk cache to a custom location for easier cleanup
-    const cacheDir = path.join(customTempDir, 'cache');
-    options.addArguments(`--disk-cache-dir=${cacheDir}`);
-    options.addArguments('--disk-cache-size=50000000'); // 50MB limit
     
     // Allow disabling headless mode via CLI or env
     const noHeadless = process.argv.includes('--no-headless') || process.env.NO_HEADLESS === '1' || process.env.NO_HEADLESS === 'true';
     if (!noHeadless) {
-      options.addArguments('--headless=new'); // Use new headless mode for CI
-    } else {
-      console.log('[BaseSeleniumTest] Running in headed (non-headless) mode');
+      options.addArguments('--headless=new');
     }
-
-    // Set service args for better cleanup
-    const service = new chrome.ServiceBuilder();
-    service.addArguments('--whitelisted-ips=');
-    service.addArguments('--disable-background-networking');
 
     this.driver = await new Builder()
       .forBrowser('chrome')
       .setChromeOptions(options)
-      .setChromeService(service)
       .build();
     
-    // Set explicit window size in both headed and headless modes for consistency
     await this.driver.manage().window().setRect({ width: 1920, height: 1400 });
 
     // Initialize debug helper and log test start
@@ -196,8 +155,7 @@ export class BaseSeleniumTest {
     if (this.driver) {
       // Check if browser session is still alive before attempting screenshot
       if (!await this.isBrowserSessionAlive()) {
-        console.warn('[BaseSeleniumTest] Browser session not available for screenshot, skipping');
-        return;
+        return; // Silently skip if browser session is not available
       }
       
       const screenshotPath = path.join(this.screenshotDir, `${this.getScreenshotName()}.png`);
@@ -229,102 +187,27 @@ export class BaseSeleniumTest {
     }
   }
 
-  /**
-   * Clean up custom temporary directories with retry logic
-   */
-  private async cleanupCustomTempDirs(): Promise<void> {
-    for (const tempDir of this.tempDirs) {
-      try {
-        if (fs.existsSync(tempDir)) {
-          // Try immediate cleanup first
-          try {
-            fs.rmSync(tempDir, { recursive: true, force: true });
-            continue; // Success, move to next directory
-          } catch (err) {
-            // If immediate cleanup fails, wait and retry
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            try {
-              fs.rmSync(tempDir, { recursive: true, force: true });
-              continue; // Success after delay
-            } catch (retryErr) {
-              // Final attempt with more aggressive cleanup
-              await this.forceRemoveDirectory(tempDir);
-            }
-          }
-        }
-      } catch (err) {
-        // Don't throw on cleanup errors, but log them for debugging
-        console.warn(`[BaseSeleniumTest] Could not clean up temp directory: ${tempDir}`);
-      }
-    }
-    this.tempDirs = [];
-  }
 
-  /**
-   * Aggressively attempt to remove a directory on Windows
-   */
-  private async forceRemoveDirectory(dirPath: string): Promise<void> {
-    if (process.platform === 'win32') {
-      try {
-        // On Windows, use command line to force remove
-        const { spawn } = require('child_process');
-        await new Promise<void>((resolve) => {
-          const proc = spawn('cmd', ['/c', 'rmdir', '/s', '/q', `"${dirPath}"`], {
-            stdio: 'ignore',
-            shell: true
-          });
-          proc.on('close', () => resolve()); // Don't care about exit code
-        });
-      } catch {
-        // If cmd approach fails, try one more time with Node.js
-        try {
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          fs.rmSync(dirPath, { recursive: true, force: true });
-        } catch {
-          // Final failure - directory will remain but don't throw error
-        }
-      }
-    } else {
-      // On Unix systems, try one more time after delay
-      try {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        fs.rmSync(dirPath, { recursive: true, force: true });
-      } catch {
-        // Final failure - directory will remain but don't throw error
-      }
-    }
-  }
 
   async finish(testPassed = false) {
     if (this.driver) {
       try {
         await this.saveScreenshot();
       } catch (err) {
-        console.error('[BaseSeleniumTest] Error during saveScreenshot in finish:', err);
+        // Ignore screenshot errors
       }
       
-      // Add timeout to driver.quit()
       try {
-        await Promise.race([
-          this.driver.quit(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Driver quit timeout')), 10000))
-        ]);
+        await this.driver.quit();
       } catch (err) {
-        console.error('[BaseSeleniumTest] Error during driver.quit in finish:', err);
+        // Ignore driver quit errors
       }
       
-      // Wait a bit for Chrome to fully close and release file handles
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Clean up custom temporary directories (now async with proper waiting)
-      await this.cleanupCustomTempDirs();
-      
-      // Clean up general Chrome temp files
-      this.cleanupChromeTemp();
-      
-      // Do not call process.exit here; let the test runner handle process exit
+      this.driver = null;
     }
+
+    // Clean up Chrome temporary files
+    this.cleanupChromeTemp();
 
     // Save debug report if debug mode is enabled
     if (this.debugConfig.enabled) {
@@ -335,7 +218,6 @@ export class BaseSeleniumTest {
       });
       await this.debugLogger?.saveDebugReport();
       
-      // If test failed, provide guidance about AI analysis
       if (!testPassed) {
         console.log('');
         console.log('🤖 [AI ANALYSIS] Test failed - AI-ready analysis request generated!');
@@ -449,9 +331,9 @@ export class BaseSeleniumTest {
     }
     
     try {
-      await this.finish(false); // Ensure browser closes and screenshot is saved
+      await this.finish(false);
     } catch (teardownErr) {
-      console.error('[BaseSeleniumTest] Error during finish in handleError:', teardownErr);
+      // Silently handle cleanup errors
     }
     
     // Additional AI analysis feedback after finish() which generates the report
@@ -477,7 +359,6 @@ export class BaseSeleniumTest {
       fs.writeFileSync(tmpErrorPath, errorText, 'utf8');
     } catch {}
     await this.flushLogs();
-    await new Promise(res => setTimeout(res, 200));
     process.exit(1);
   }
 

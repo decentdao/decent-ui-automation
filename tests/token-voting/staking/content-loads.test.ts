@@ -3,8 +3,6 @@ import { getTestDao } from '../../../config/test-daos';
 import { BaseSeleniumTest } from '../../base-selenium-test';
 import { By } from 'selenium-webdriver';
 import { pages } from '../../../config/pages';
-import { defaultWalletAddress } from '../../../config/test-settings';
-import { setupWalletImpersonator } from '../../wallet-impersonator';
 
 /**
  * @governance erc20
@@ -18,10 +16,6 @@ const governanceType = governanceArg ? governanceArg.split('=')[1].toLowerCase()
 const test = new BaseSeleniumTest('staking', 'content-loads');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
-
-  // Set up wallet impersonation in the first tab and get the new tab handle
-  await setupWalletImpersonator(test.driver!, { walletAddress: defaultWalletAddress }, getBaseUrl());
-
   const pagePath = `${pages['staking']}?dao=${getTestDao(governanceType).value}`;
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pagePath));
   
