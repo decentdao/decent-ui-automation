@@ -82,31 +82,3 @@ export async function scrollOpenDropdownToBottom(driver: WebDriver): Promise<boo
   `);
   return Boolean(didScroll);
 }
-
-/**
- * Checks if wallet is connected by examining the header account menu.
- * Returns immediately with diagnostic info - no retries or remediation.
- */
-export async function checkWalletConnectionStatus(test: any): Promise<{ connected: boolean; menuText: string }> {
-  const { By, until } = await import('selenium-webdriver');
-  const { defaultWalletAddress } = await import('../config/test-settings');
-  
-  try {
-    const accountMenuElement = await test.driver!.wait(
-      until.elementLocated(By.css("[data-testid='header-accountMenu']")), 
-      3000
-    );
-    
-    const menuText = await accountMenuElement.getText();
-    const expectedPartial = `${defaultWalletAddress.slice(0, 6)}...${defaultWalletAddress.slice(-4)}`;
-    
-    // Check if connected
-    const isConnected = menuText.includes(expectedPartial) || 
-                       (menuText.match(/0x[0-9a-fA-F]{4,}/i) && !menuText.toLowerCase().includes('connect'));
-    
-    return { connected: isConnected, menuText };
-    
-  } catch (error) {
-    return { connected: false, menuText: `Error: ${error instanceof Error ? error.message : String(error)}` };
-  }
-}

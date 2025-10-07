@@ -108,6 +108,107 @@ async function getWalletConnectUri(driver: WebDriver, baseUrl: string): Promise<
 }
 
 /**
+ * Validates that the wallet connection established in the impersonator actually works in the main app
+ */
+async function validateConnectionInMainApp(driver: WebDriver, originalTabHandle: string, walletAddress: string, baseUrl: string): Promise<void> {
+  // Switch to main app tab
+  await driver.switchTo().window(originalTabHandle);
+  
+  // Navigate to the main app homepage to check connection status
+  await driver.get(baseUrl);
+  await driver.sleep(2000); // Give time for page to load
+  
+  // Check if wallet appears connected in the main app
+  const expectedPartial = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+  let connectionValid = false;
+  
+  try {
+    const accountMenuElement = await driver.wait(
+      until.elementLocated(By.css("[data-testid='header-accountMenu']")), 
+      10000
+    );
+    
+    if (accountMenuElement) {
+      const menuText = await accountMenuElement.getText();
+      
+      // Check if it shows the expected wallet address or any valid wallet address
+      if (menuText.includes(expectedPartial) || 
+          (menuText.match(/0x[0-9a-fA-F]{4,}/i) && !menuText.toLowerCase().includes('connect'))) {
+        connectionValid = true;
+      } else {
+        console.warn(`[WalletImpersonator] Main app shows: "${menuText}" (expected wallet address)`);
+      }
+    }
+  } catch (error) {
+    console.warn(`[WalletImpersonator] Could not find account menu in main app: ${error}`);
+  }
+  
+  if (!connectionValid) {
+    // Give it one more chance with a refresh
+    await driver.navigate().refresh();
+    await driver.sleep(3000);
+    
+    try {
+      const accountMenuElement = await driver.wait(
+        until.elementLocated(By.css("[data-testid='header-accountMenu']")), 
+        5000
+      );
+      
+      if (accountMenuElement) {
+        const menuText = await accountMenuElement.getText();
+        if (menuText.includes(expectedPartial) || 
+            (menuText.match(/0x[0-9a-fA-F]{4,}/i) && !menuText.toLowerCase().includes('connect'))) {
+          connectionValid = true;
+        }
+      }
+    } catch (error) {
+      // Ignore error on second attempt
+    }
+  }
+  
+  if (!connectionValid) {
+    // Connection not visible in main app, attempting to trigger connection
+    
+    // Try to trigger the wallet connection in the main app
+    try {
+      // Click the account menu to open wallet connection options
+      const accountMenuElement = await driver.findElement(By.css("[data-testid='header-accountMenu']"));
+      await accountMenuElement.click();
+      await driver.sleep(2000);
+      
+      // Look for and click the connect button
+      const connectButton = await driver.findElement(By.css("[data-testid='accountMenu-connect']"));
+      await connectButton.click();
+      await driver.sleep(2000);
+      
+      // The WalletConnect modal should appear - the existing WC session should auto-connect
+      // Wait a moment for the connection to establish
+      await driver.sleep(3000);
+      
+      // Check if connection is now visible
+      try {
+        const accountMenuElement = await driver.findElement(By.css("[data-testid='header-accountMenu']"));
+        const menuText = await accountMenuElement.getText();
+        
+        if (menuText.includes(expectedPartial) || 
+            (menuText.match(/0x[0-9a-fA-F]{4,}/i) && !menuText.toLowerCase().includes('connect'))) {
+          connectionValid = true;
+        }
+      } catch (error) {
+        console.warn('[WalletImpersonator] Could not verify connection after trigger attempt');
+      }
+      
+    } catch (error) {
+      console.warn(`[WalletImpersonator] Could not trigger connection in main app: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  
+  if (!connectionValid) {
+    throw new Error('Wallet impersonator setup appeared successful but could not establish connection in main app even after trigger attempt');
+  }
+}
+
+/**
  * Sets up wallet impersonation in a new tab, then switches back to the first tab for the main test.
  * This function should be called before the main test steps begin.
  * 
@@ -127,8 +228,6 @@ export async function setupWalletImpersonator(
     timeoutMs = 30000
   } = config;
 
-  console.log(`[WalletImpersonator] Setting up wallet impersonation for ${walletAddress}`);
-  
   try {
     const originalTabHandle = await driver.getWindowHandle();
     const walletConnectUri = await getWalletConnectUri(driver, baseUrl);
@@ -220,7 +319,7 @@ export async function setupWalletImpersonator(
       }
       
     } catch (error) {
-      console.log(`[WalletImpersonator] Network selection failed or may already be correct:`, error instanceof Error ? error.message : String(error));
+      // Network selection failed or may already be correct - continuing silently
     }
 
     const wcTab = await driver.wait(
@@ -243,6 +342,10 @@ export async function setupWalletImpersonator(
     await connectBtn.click();
 
     await waitUntilWalletConnected(driver, timeoutMs);
+    
+    // Validate that wallet connection actually works in the main app
+    await validateConnectionInMainApp(driver, originalTabHandle, walletAddress, baseUrl);
+    
     await driver.switchTo().window(originalTabHandle);
     
     return originalTabHandle;
@@ -311,7 +414,6 @@ async function waitUntilWalletConnected(driver: WebDriver, timeoutMs = 30000): P
         }
         
         if (foundSessionIndicator) {
-          console.log('[WalletImpersonator] Connection confirmed - WalletConnect session established');
           await driver.sleep(2000);
           return;
         }
