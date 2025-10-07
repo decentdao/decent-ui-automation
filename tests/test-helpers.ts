@@ -84,52 +84,29 @@ export async function scrollOpenDropdownToBottom(driver: WebDriver): Promise<boo
 }
 
 /**
- * Verifies that the wallet is connected by checking the header-accountMenu element
- * for the expected wallet address or any wallet address pattern
+ * Checks if wallet is connected by examining the header account menu.
+ * Returns immediately with diagnostic info - no retries or remediation.
  */
-export async function verifyWalletConnected(test: any, maxRetries: number = 3): Promise<boolean> {
+export async function checkWalletConnectionStatus(test: any): Promise<{ connected: boolean; menuText: string }> {
   const { By, until } = await import('selenium-webdriver');
   const { defaultWalletAddress } = await import('../config/test-settings');
   
-  // Extract partial address for matching (first 6 and last 4 characters)
-  const expectedPartial = `${defaultWalletAddress.slice(0, 6)}...${defaultWalletAddress.slice(-4)}`;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // Look for the header account menu element
-      const accountMenuElement = await test.driver!.wait(
-        until.elementLocated(By.css("[data-testid='header-accountMenu']")), 
-        2000
-      );
-      
-      if (accountMenuElement) {
-        const menuText = await accountMenuElement.getText();
-        
-        // Check if it shows the expected wallet address (partial match)
-        if (menuText.includes(expectedPartial)) {
-          return true;
-        }
-        
-        // Check if it shows any wallet address pattern (0x followed by characters, not "connect wallet")
-        if (menuText.match(/0x[0-9a-fA-F]{4,}/i) && !menuText.toLowerCase().includes('connect')) {
-          return true;
-        }
-      }
-
-      // If wallet not connected and not last attempt, refresh and wait
-      if (attempt < maxRetries) {
-        await test.driver!.navigate().refresh();
-        await test.driver!.sleep(3000);
-      }
-    } catch (error) {
-      if (attempt < maxRetries) {
-        await test.driver!.sleep(2000);
-      } else {
-        console.warn(`[WalletVerification] Failed to verify wallet connection: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
+  try {
+    const accountMenuElement = await test.driver!.wait(
+      until.elementLocated(By.css("[data-testid='header-accountMenu']")), 
+      3000
+    );
+    
+    const menuText = await accountMenuElement.getText();
+    const expectedPartial = `${defaultWalletAddress.slice(0, 6)}...${defaultWalletAddress.slice(-4)}`;
+    
+    // Check if connected
+    const isConnected = menuText.includes(expectedPartial) || 
+                       (menuText.match(/0x[0-9a-fA-F]{4,}/i) && !menuText.toLowerCase().includes('connect'));
+    
+    return { connected: isConnected, menuText };
+    
+  } catch (error) {
+    return { connected: false, menuText: `Error: ${error instanceof Error ? error.message : String(error)}` };
   }
-  
-  console.warn(`[WalletVerification] Could not verify wallet connection after ${maxRetries} attempts`);
-  return false;
 }
