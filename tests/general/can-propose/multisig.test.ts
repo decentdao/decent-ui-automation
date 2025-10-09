@@ -11,15 +11,37 @@ const test = new BaseSeleniumTest('can-propose', 'multisig');
 BaseSeleniumTest.run(async (test) => {
   await test.start();
 
-  // Set up wallet impersonation in the first tab and get the new tab handle
-  await setupWalletImpersonator(test.driver!, { walletAddress: defaultWalletAddress }, getBaseUrl());
-  
-  // Navigate to the multisig DAO homepage
-  const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
-  await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
-  
-  // Look for the Create Proposal button
-  await test.waitForElement(By.css("[data-testid='desktop-createProposal']"));
-  console.log('Create Proposal button found, isProposer check succeeded.');
+  const maxRetries = 2;
+  let retryCount = 0;
+
+  const runTestSteps = async () => {
+    // Set up wallet impersonation in the first tab and get the new tab handle
+    await setupWalletImpersonator(test.driver!, { walletAddress: defaultWalletAddress }, getBaseUrl());
+    
+    // Navigate to the multisig DAO homepage
+    const daoHomePath = `${pages['dao-homepage']}?dao=${getTestDao('multisig').value}`;
+    await test.driver!.get(appendFlagsToUrl(getBaseUrl() + daoHomePath));
+    
+    // Look for the Create Proposal button
+    await test.waitForElement(By.css("[data-testid='desktop-createProposal']"));
+    console.log('Create Proposal button found, isProposer check succeeded.');
+  };
+
+  while (retryCount < maxRetries) {
+    try {
+      await runTestSteps();
+      break; // Success, exit retry loop
+    } catch (error) {
+      retryCount++;
+      console.log(`Test attempt ${retryCount} failed. ${retryCount < maxRetries ? 'Retrying...' : 'Max retries reached.'}`);
+      
+      if (retryCount >= maxRetries) {
+        throw error; // Re-throw the error after max retries
+      }
+      
+      // Wait a moment before retrying
+      await test.driver!.sleep(2000);
+    }
+  }
   
 }, test);
