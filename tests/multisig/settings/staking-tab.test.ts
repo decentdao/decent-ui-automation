@@ -22,6 +22,6 @@ BaseSeleniumTest.run(async (test) => {
   const modulesTab = await test.waitForElement(By.css("[data-testid='settings-nav-staking']"));
   await modulesTab.click();
   // Wait for the Staking contract address text
-  await test.waitForElement(By.xpath("//p[text()='0x2B1D9958d99a15317127736119C0e201BaD1fDb0']"));
+  await test.waitForElement(By.xpath("//p[text()='0xa1ee8BFe70dA74CDd6b8407601293d132500951B']"));
   console.log('Staking tab opened and Staking contract address text found.');
 }, test);

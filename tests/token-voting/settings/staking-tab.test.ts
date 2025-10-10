@@ -34,7 +34,7 @@ BaseSeleniumTest.run(async (test) => {
     const modulesTab = await test.waitForElement(By.css("[data-testid='settings-nav-staking']"));
     await modulesTab.click();
     // Wait for the Staking contract address text
-    await test.waitForElement(By.xpath("//p[text()='0x0a6F4aAa4E20ad29826dA08FA159f56a3fb409Ad']"));
+    await test.waitForElement(By.xpath("//p[text()='0x5844b5eEe93390aB0cE9C7B6544A109657389Aa4']"));
   };
   
   while (retryCount < maxRetries) {
