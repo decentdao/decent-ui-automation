@@ -1,4 +1,4 @@
-import { getBaseUrl, appendFlagsToUrl } from '../../test-helpers';
+import { getBaseUrl, appendFlagsToUrl, cleanupBrowserStateForRetry } from '../../test-helpers';
 import { BaseSeleniumTest } from '../../base-selenium-test';
 import { setupWalletImpersonator } from '../../wallet-impersonator';
 import { defaultWalletAddress } from '../../../config/test-settings';
@@ -19,6 +19,11 @@ BaseSeleniumTest.run(async (test) => {
   while (!canProposeCheckSucceeded && retryCount < maxRetries) {
     try {
       console.log(`Attempting can-propose check (attempt ${retryCount + 1}/${maxRetries})`);
+      
+      // Clean up browser state before retry (except on first attempt)
+      if (retryCount > 0) {
+        await cleanupBrowserStateForRetry(test.driver!);
+      }
       
       // Set up wallet impersonation in the first tab and get the new tab handle
       await setupWalletImpersonator(test.driver!, { walletAddress: defaultWalletAddress }, getBaseUrl());

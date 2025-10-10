@@ -82,3 +82,27 @@ export async function scrollOpenDropdownToBottom(driver: WebDriver): Promise<boo
   `);
   return Boolean(didScroll);
 }
+
+// Clean up browser state for retries when using wallet connect
+export async function cleanupBrowserStateForRetry(driver: WebDriver): Promise<void> {
+  try {
+    const originalHandle = await driver.getWindowHandle();
+    const allHandles = await driver.getAllWindowHandles();
+    
+    // Close all tabs except the original one
+    for (const handle of allHandles) {
+      if (handle !== originalHandle) {
+        await driver.switchTo().window(handle);
+        await driver.close();
+      }
+    }
+    
+    await driver.switchTo().window(originalHandle);
+    
+    // Clear browser state
+    await driver.manage().deleteAllCookies();
+    await driver.executeScript("localStorage.clear(); sessionStorage.clear();");
+  } catch (error) {
+    // Silently continue if cleanup fails
+  }
+}
