@@ -80,8 +80,8 @@ function generateMarkdownSummary(testResults: TestResult[], options: {
 }): void {
   const { resultsDir, passedCount, totalCount, timestamp, totalRunTimeStr, baseUrl } = options;
 
-  let md = `## 🧪 UI Automation Test Results\n\n`;
-  md += `> 📸 Download all screenshots from the workflow artifacts above. Extract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
+  let md = `## UI Automation Test Results\n\n`;
+  md += `> Download all screenshots from the workflow artifacts above. Extract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
   md += `**Timestamp:** ${timestamp}  \n`;
   if (baseUrl) {
     md += `**Base URL:** ${baseUrl}  \n`;
@@ -366,11 +366,11 @@ export async function generateCombinedSummary(
   const testStatusMessage = (mdTotalPassed / mdTotalCount) === 1 ? '✅ **All tests are passing!** ✅' : '❌ **Some tests did not pass!** ❌';
   
   // Build markdown
-  let combinedMd = `# 🧪 UI Automation Test Results\n\n**Start Timestamp:** ${firstTimestamp}  \n`;
+  let combinedMd = `# UI Automation Test Results\n\n**Start Timestamp:** ${firstTimestamp}  \n`;
   combinedMd += mdSummaryStats;
   combinedMd += `${testStatusMessage}\n\n`;
 
-  combinedMd += `> 📸 Download all screenshots from the workflow artifacts above. \nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
+  combinedMd += `> Download all screenshots from the workflow artifacts above. \nExtract the test results file and open the html summary to quickly review results and screenshots.\n\n`;
 
   combinedMd += `<details>`
   combinedMd += `<summary>Click to expand full test results</summary>`;
