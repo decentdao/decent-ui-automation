@@ -11,7 +11,7 @@ BaseSeleniumTest.run(async (test) => {
   await test.driver!.get(appendFlagsToUrl(getBaseUrl() + pagePath));
   
   // NOTE: This shouldn't be necessary, but works around page contents not showing on first load
-  await test.driver!.sleep(5000);
+  await test.driver!.sleep(10000);
   await test.driver!.navigate().refresh();
 
   // Wait for the input field to appear - extra wait due to the above
